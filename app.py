@@ -26,7 +26,19 @@ import time
 import torch
 from sklearn.metrics import classification_report
 from torchinfo import summary as torch_summary
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Set page configuration - THIS MUST BE THE FIRST STREAMLIT COMMAND
+st.set_page_config(
+    page_title="Intelligent Algorithmic Trading System",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 # Import custom modules
 from utils.data_loader import DataLoader
@@ -39,17 +51,11 @@ from utils.visualization import (
     create_performance_report
 )
 
-# Set page configuration
-st.set_page_config(
-    page_title="Intelligent Algorithmic Trading System",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
 # Initialize session state
 if 'data' not in st.session_state:
     st.session_state.data = None
+if 'prepared_data' not in st.session_state:
+    st.session_state.prepared_data = None
 if 'model' not in st.session_state:
     st.session_state.model = None
 if 'history' not in st.session_state:
@@ -60,6 +66,9 @@ if 'strategy_results' not in st.session_state:
     st.session_state.strategy_results = None
 if 'benchmark_results' not in st.session_state:
     st.session_state.benchmark_results = None
+
+# Log session state for debugging
+logger.info(f"Session state contains these keys: {list(st.session_state.keys())}")
 
 # Define date format for British English
 DATE_FORMAT = "%d/%m/%Y"
@@ -131,6 +140,21 @@ def main():
     
     # Create sidebar for navigation
     st.sidebar.title("Navigation")
+    
+    # Add debug info to sidebar
+    with st.sidebar.expander("Debug Information", expanded=False):
+        st.write("Session State Keys:")
+        st.write(list(st.session_state.keys()))
+        if 'data' in st.session_state and st.session_state.data is not None:
+            st.write("✅ Raw data loaded")
+        else:
+            st.write("❌ No raw data")
+            
+        if 'prepared_data' in st.session_state and st.session_state.prepared_data is not None:
+            st.write("✅ Data prepared for modeling")
+        else:
+            st.write("❌ Data not prepared")
+    
     page = st.sidebar.radio("Go to", ["Introduction", "Data Preparation", "Model Training", "Trading Strategy", "Performance Analysis", "About"])
     
     # Display selected page
@@ -238,6 +262,10 @@ def display_data_preparation():
     """Display data preparation page with data download and visualization."""
     st.markdown('<div class="sub-header">Data Preparation</div>', unsafe_allow_html=True)
     
+    # Debug info
+    logger.info("Displaying data preparation page")
+    logger.info(f"Current session state keys: {list(st.session_state.keys())}")
+    
     st.markdown('<div class="section">', unsafe_allow_html=True)
     # Download data
     st.markdown("### Download Stock Data")
@@ -286,28 +314,150 @@ def display_data_preparation():
     start_date_str = start_date.strftime("%d/%m/%Y")
     end_date_str = end_date.strftime("%d/%m/%Y")
     
-    # Download button
-    if st.button("Download Data"):
-        with st.spinner("Downloading data..."):
-            # Initialize DataLoader
-            data_loader = DataLoader()
-            
-            # Download data
-            data = data_loader.download_dow30_data(start_date_str, end_date_str, force_download)
-            
-            # Store data in session state
-            st.session_state.data = data
-            
-            # Display success message
-            if selected_ticker in data:
-                st.success(f"Successfully downloaded data for {selected_ticker}")
-                # Extra info about benchmark alignment
-                if (start_date_str == "01/01/2007" and end_date_str == "31/12/2017"):
-                    st.info("✓ Using the exact date range from Sezer & Ozbayoglu (2018) paper for proper benchmarking.")
+    # Create two separate buttons for downloading and preparing
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Download button
+        if st.button("1. Download Data"):
+            with st.spinner("Downloading data..."):
+                # Initialize DataLoader
+                data_loader = DataLoader()
+                
+                # Download data
+                data = data_loader.download_dow30_data(start_date_str, end_date_str, force_download)
+                
+                # Store data in session state
+                st.session_state.data = data
+                
+                logger.info(f"Downloaded data for {list(data.keys())}")
+                
+                # Display success message
+                if selected_ticker in data:
+                    st.success(f"Successfully downloaded data for {selected_ticker}")
+                    # Extra info about benchmark alignment
+                    if (start_date_str == "01/01/2007" and end_date_str == "31/12/2017"):
+                        st.info("✓ Using the exact date range from Sezer & Ozbayoglu (2018) paper for proper benchmarking.")
+                    else:
+                        st.warning("⚠️ Not using the exact benchmark date range. Consider using 01/01/2007 to 31/12/2017 for a fair comparison.")
                 else:
-                    st.warning("⚠️ Not using the exact benchmark date range. Consider using 01/01/2007 to 31/12/2017 for a fair comparison.")
+                    st.error(f"Failed to download data for {selected_ticker}")
+    
+    with col2:
+        # Only show prepare button if data is available
+        prepare_disabled = True
+        if 'data' in st.session_state and st.session_state.data is not None:
+            if selected_ticker in st.session_state.data:
+                prepare_disabled = False
+        
+        # Prepare button
+        if st.button("2. Prepare Data for Modeling", disabled=prepare_disabled):
+            if st.session_state.data is not None and selected_ticker in st.session_state.data:
+                with st.spinner("Preparing data for modeling..."):
+                    try:
+                        logger.info(f"Starting data preparation for {selected_ticker}")
+                        
+                        # Initialize feature engineer
+                        feature_engineer = FeatureEngineer()
+                        
+                        # Prepare features
+                        df_features = feature_engineer.prepare_features_for_model(
+                            st.session_state.data, 
+                            selected_ticker
+                        )
+                        
+                        logger.info(f"Generated features with shape: {df_features.shape}")
+                        
+                        # Create sequences for the model
+                        window_size = 30  # Default window size from the paper
+                        
+                        # Display features info
+                        st.info(f"Generated {len(df_features.columns)} features for {selected_ticker}")
+                        
+                        # Create sequences and labels
+                        X, y = [], []
+                        for i in range(window_size, len(df_features)):
+                            X.append(df_features.iloc[i-window_size:i].values)
+                            # Label: 1 if price goes up, 0 if it goes down
+                            price_change = df_features.iloc[i]['Close'] > df_features.iloc[i-1]['Close']
+                            y.append(1 if price_change else 0)
+                        
+                        X = np.array(X)
+                        y = np.array(y)
+                        
+                        logger.info(f"Created sequences with shape: {X.shape}")
+                        
+                        # Split data into train, validation, and test sets
+                        train_ratio = 0.7
+                        val_ratio = 0.15
+                        
+                        # Calculate split indices
+                        train_size = int(len(X) * train_ratio)
+                        val_size = int(len(X) * val_ratio)
+                        
+                        # Create train, validation, and test sets
+                        X_train, y_train = X[:train_size], y[:train_size]
+                        X_val, y_val = X[train_size:train_size+val_size], y[train_size:train_size+val_size]
+                        X_test, y_test = X[train_size+val_size:], y[train_size+val_size:]
+                        
+                        logger.info(f"Train set: {X_train.shape}, Validation set: {X_val.shape}, Test set: {X_test.shape}")
+                        
+                        # Store prepared data in session state
+                        st.session_state.prepared_data = {
+                            'X_train': X_train,
+                            'y_train': y_train,
+                            'X_val': X_val,
+                            'y_val': y_val,
+                            'X_test': X_test,
+                            'y_test': y_test,
+                            'ticker': selected_ticker,
+                            'window_size': window_size
+                        }
+                        
+                        logger.info("Data preparation complete and stored in session state")
+                        logger.info(f"Updated session state keys: {list(st.session_state.keys())}")
+                        
+                        # Show success message with session state keys
+                        st.success(f"""
+                        Data preparation complete! 
+                        - Training set: {X_train.shape[0]} samples
+                        - Validation set: {X_val.shape[0]} samples
+                        - Test set: {X_test.shape[0]} samples
+                        
+                        You can now proceed to the Model Training page.
+                        """)
+                        
+                    except Exception as e:
+                        st.error(f"Error preparing data: {str(e)}")
+                        logger.error(f"Error in data preparation: {str(e)}", exc_info=True)
+                        st.exception(e)
             else:
-                st.error(f"Failed to download data for {selected_ticker}")
+                st.error("Please download data first.")
+    
+    # Show data visualization if data is available
+    if 'data' in st.session_state and st.session_state.data is not None and selected_ticker in st.session_state.data:
+        st.markdown("### Data Visualization")
+        
+        # Get data for the selected ticker
+        ticker_data = st.session_state.data[selected_ticker]
+        
+        # Create visualization
+        fig = plot_stock_data(st.session_state.data, selected_ticker)
+        st.pyplot(fig)
+        
+        # Show data sample
+        st.markdown("### Data Sample")
+        st.dataframe(ticker_data.head())
+    
+    # Show data preparation status
+    if 'prepared_data' in st.session_state and st.session_state.prepared_data is not None:
+        st.markdown("### ✅ Data Preparation Status")
+        st.success(f"""
+        Data is prepared and ready for model training!
+        - Ticker: {st.session_state.prepared_data['ticker']}
+        - Training samples: {st.session_state.prepared_data['X_train'].shape[0]}
+        - Features per sample: {st.session_state.prepared_data['X_train'].shape[2]}
+        """)
     
     # Benchmark info
     with st.expander("📚 Benchmark Information"):
@@ -338,9 +488,19 @@ def display_model_training():
     """Display model training page with model configuration and training."""
     st.markdown('<div class="sub-header">Model Training</div>', unsafe_allow_html=True)
     
+    # Debug info
+    logger.info("Displaying model training page")
+    logger.info(f"Current session state keys: {list(st.session_state.keys())}")
+    if 'prepared_data' in st.session_state:
+        logger.info("prepared_data exists in session state")
+    else:
+        logger.info("prepared_data does NOT exist in session state")
+    
     # Check if data is prepared
-    if 'prepared_data' not in st.session_state:
+    if 'prepared_data' not in st.session_state or st.session_state.prepared_data is None:
         st.warning("Please prepare data first in the 'Data Preparation' section.")
+        st.error(f"No prepared_data found in session state. Available keys: {list(st.session_state.keys())}")
+        st.info("Go to the Data Preparation page, download data, and click the 'Prepare Data for Modeling' button.")
         return
     
     # Get prepared data
@@ -355,6 +515,14 @@ def display_model_training():
     
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.markdown("### Model Configuration")
+    
+    # Show data summary
+    st.info(f"""
+    **Data Summary for {ticker}**
+    - Training samples: {X_train.shape[0]} (with {X_train.shape[2]} features)
+    - Validation samples: {X_val.shape[0]}
+    - Test samples: {X_test.shape[0]} 
+    """)
     
     col1, col2 = st.columns(2)
     
@@ -382,70 +550,84 @@ def display_model_training():
     # Train model button
     if st.button("Train Model"):
         with st.spinner("Training model... This may take a few minutes."):
-            # Initialize model
-            model = CNNTradingModel(input_shape)
-            
-            # Build model
-            if model_type == "Simple CNN":
-                model.build_simple_cnn()
-                advanced = False
-            else:
-                model.build_advanced_cnn()
-                advanced = True
-            
-            # Display model summary
-            st.markdown("#### Model Summary")
-            model_summary = []
-            # Create a sample input tensor with the right shape
-            sample_input = torch.zeros((1,) + model.input_shape)
-            summary_str = str(torch_summary(model.model, input_size=sample_input.shape))
-            model_summary.append(summary_str)
-            st.code("\n".join(model_summary))
-            
-            # Train model
-            history = model.train(
-                X_train, y_train, X_val, y_val,
-                advanced=advanced,
-                epochs=epochs,
-                batch_size=batch_size
-            )
-            
-            # Store model and history in session state
-            st.session_state.model = model
-            st.session_state.history = history
-            
-            # Display training plots
-            st.markdown("#### Training History")
-            fig = plot_model_training_history(history)
-            st.pyplot(fig)
-            
-            # Evaluate model
-            st.markdown("#### Model Evaluation")
-            
-            # Make predictions
-            y_pred_prob = model.predict(X_test)
-            st.session_state.predictions = y_pred_prob
-            
-            # Display evaluation metrics
-            metrics = model.evaluate(X_test, y_test)
-            
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Accuracy", f"{metrics['accuracy']:.2%}")
-            with col2:
-                st.metric("Precision", f"{metrics['precision']:.2%}")
-            with col3:
-                st.metric("Recall", f"{metrics['recall']:.2%}")
-            with col4:
-                st.metric("F1 Score", f"{metrics['f1_score']:.2%}")
-            
-            # Display evaluation plots
-            fig = plot_model_evaluation(y_test, y_pred_prob)
-            st.pyplot(fig)
-            
-            # Save model
-            model.save(f"{ticker}_model")
-            st.success(f"Model trained and saved as {ticker}_model.h5")
+            try:
+                logger.info(f"Starting model training with {model_type} architecture")
+                logger.info(f"Input shape: {input_shape}")
+                
+                # Initialize model
+                model = CNNTradingModel(input_shape)
+                
+                # Build model
+                if model_type == "Simple CNN":
+                    model.build_simple_cnn()
+                    advanced = False
+                else:
+                    model.build_advanced_cnn()
+                    advanced = True
+                
+                # Display model summary
+                st.markdown("#### Model Summary")
+                model_summary = []
+                # Create a sample input tensor with the right shape
+                sample_input = torch.zeros((1,) + model.input_shape)
+                summary_str = str(torch_summary(model.model, input_size=sample_input.shape))
+                model_summary.append(summary_str)
+                st.code("\n".join(model_summary))
+                
+                # Train model
+                logger.info(f"Training model with {epochs} epochs and batch size {batch_size}")
+                history = model.train(
+                    X_train, y_train, X_val, y_val,
+                    advanced=advanced,
+                    epochs=epochs,
+                    batch_size=batch_size
+                )
+                
+                # Store model and history in session state
+                st.session_state.model = model
+                st.session_state.history = history
+                
+                logger.info("Model training completed")
+                logger.info(f"Updated session state keys: {list(st.session_state.keys())}")
+                
+                # Display training plots
+                st.markdown("#### Training History")
+                fig = plot_model_training_history(history)
+                st.pyplot(fig)
+                
+                # Evaluate model
+                st.markdown("#### Model Evaluation")
+                
+                # Make predictions
+                y_pred_prob = model.predict(X_test)
+                st.session_state.predictions = y_pred_prob
+                
+                # Display evaluation metrics
+                metrics = model.evaluate(X_test, y_test)
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Accuracy", f"{metrics['accuracy']:.2%}")
+                with col2:
+                    st.metric("Precision", f"{metrics['precision']:.2%}")
+                with col3:
+                    st.metric("Recall", f"{metrics['recall']:.2%}")
+                with col4:
+                    st.metric("F1 Score", f"{metrics['f1_score']:.2%}")
+                
+                # Display evaluation plots
+                fig = plot_model_evaluation(y_test, y_pred_prob)
+                st.pyplot(fig)
+                
+                # Save model
+                model.save(f"{ticker}_model")
+                st.success(f"Model trained and saved as {ticker}_model.h5")
+                
+            except Exception as e:
+                st.error(f"Error training model: {str(e)}")
+                logger.error(f"Error in model training: {str(e)}", exc_info=True)
+                st.exception(e)
+    
     st.markdown('</div>', unsafe_allow_html=True)
 
 def display_trading_strategy():

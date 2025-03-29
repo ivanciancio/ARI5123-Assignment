@@ -187,7 +187,19 @@ class CNNTradingModel:
         self.input_shape = input_shape
         self.model_dir = model_dir
         self.model = None
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Modified device selection for cloud environment compatibility
+        # This avoids issues with CUDA availability in cloud environments
+        try:
+            if torch.cuda.is_available():
+                self.device = torch.device("cuda")
+            else:
+                self.device = torch.device("cpu")
+        except:
+            # Fallback to CPU if there are any issues with CUDA detection
+            self.device = torch.device("cpu")
+            
+        print(f"Using device: {self.device}")
         
         # Create model directory if it doesn't exist
         if not os.path.exists(model_dir):

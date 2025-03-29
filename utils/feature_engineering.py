@@ -75,8 +75,8 @@ class FeatureEngineer:
         df_features['ATR'] = ta.volatility.AverageTrueRange(df_features['High'], df_features['Low'], df_features['Close']).average_true_range()
         
         # 4. Volume Indicators
-        # Volume moving average
-        df_features['Volume_SMA_10'] = ta.volatility.sma_indicator(df_features['Volume'], window=10)
+        # Volume moving average - FIXED: using ta.trend instead of ta.volatility
+        df_features['Volume_SMA_10'] = ta.trend.sma_indicator(df_features['Volume'], window=10)
         
         # On-Balance Volume
         df_features['OBV'] = ta.volume.OnBalanceVolumeIndicator(df_features['Close'], df_features['Volume']).on_balance_volume()
