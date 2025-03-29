@@ -483,6 +483,9 @@ def display_model_training():
     - Test samples: {X_test.shape[0]} 
     """)
     
+    # Create progress bar components ahead of time (but initially hidden)
+    progress_container = st.empty()
+    
     col1, col2 = st.columns(2)
     
     with col1:
@@ -493,6 +496,17 @@ def display_model_training():
         )
         
         epochs = st.slider("Training Epochs", min_value=10, max_value=100, value=50, step=5)
+        
+        # Add new hyperparameters
+        st.markdown("#### Advanced Settings")
+        use_focal_loss = st.checkbox("Use Focal Loss (for imbalanced data)", value=True)
+        use_class_weights = st.checkbox("Use Class Weights", value=True)
+        weight_decay = st.select_slider(
+            "Weight Decay (Regularization)",
+            options=[0, 1e-6, 1e-5, 1e-4, 1e-3],
+            value=1e-5,
+            format_func=lambda x: f"{x:.0e}" if x > 0 else "0"
+        )
     
     with col2:
         batch_size = st.select_slider(
@@ -502,17 +516,22 @@ def display_model_training():
         )
         
         use_early_stopping = st.checkbox("Use Early Stopping", value=True)
+        
+        # Add learning rate selection
+        learning_rate = st.select_slider(
+            "Learning Rate",
+            options=[0.0001, 0.0003, 0.001, 0.003, 0.01],
+            value=0.001,
+            format_func=lambda x: f"{x:.4f}"
+        )
     
-    # Initialise model
+    # Initialize model
     input_shape = X_train.shape[1:]
-    
-    # Create progress bar components ahead of time (but initially hidden)
-    progress_container = st.empty()
     
     # Train model button
     if st.button("Train Model"):
         try:
-            # Initialise model
+            # Initialize model
             model = CNNTradingModel(input_shape)
             
             # Build model
@@ -530,10 +549,10 @@ def display_model_training():
                 progress_bar = st.progress(0)
                 metrics_text = st.empty()
                 
-                # Initialise with starting values
+                # Initialize with starting values
                 progress_text.markdown("**Preparing to train: 0/{} epochs (0%)**".format(epochs))
             
-            # Display model summary after the progress elements
+            # Display model summary
             st.markdown("#### Model Summary")
             model_summary = []
             # Create a sample input tensor with the right shape
@@ -570,7 +589,7 @@ def display_model_training():
             original_train = model.train
             
             def train_with_progress(*args, **kwargs):
-                # Initialise progress
+                # Initialize progress
                 progress_text.markdown("**Training Progress: 0/{} epochs completed (0.0%)**".format(epochs))
                 progress_bar.progress(0)
                 
@@ -580,23 +599,93 @@ def display_model_training():
                 X_val_tensor = torch.tensor(X_val, dtype=torch.float32).to(model.device)
                 y_val_tensor = torch.tensor(y_val, dtype=torch.float32).unsqueeze(1).to(model.device)
                 
+                # Calculate class weights if needed
+                class_weights = None
+                if use_class_weights:
+                    class_counts = np.bincount(y_train.astype(int))
+                    total_samples = len(y_train)
+                    class_weights = {
+                        0: total_samples / (2 * class_counts[0]) if class_counts[0] > 0 else 1.0,
+                        1: total_samples / (2 * class_counts[1]) if class_counts[1] > 0 else 1.0
+                    }
+                
                 # Create datasets and dataloaders
                 train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
                 val_dataset = torch.utils.data.TensorDataset(X_val_tensor, y_val_tensor)
                 
-                train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+                # Use weighted sampler if class weights are provided
+                if class_weights is not None:
+                    # Calculate sample weights based on class weights
+                    sample_weights = torch.zeros(len(y_train))
+                    for idx, y in enumerate(y_train):
+                        sample_weights[idx] = class_weights[int(y)]
+                    
+                    # Create weighted sampler
+                    sampler = torch.utils.data.WeightedRandomSampler(
+                        weights=sample_weights,
+                        num_samples=len(sample_weights),
+                        replacement=True
+                    )
+                    train_loader = torch.utils.data.DataLoader(
+                        train_dataset, 
+                        batch_size=batch_size, 
+                        sampler=sampler
+                    )
+                else:
+                    train_loader = torch.utils.data.DataLoader(
+                        train_dataset, 
+                        batch_size=batch_size, 
+                        shuffle=True
+                    )
+                
                 val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size)
                 
-                # Define optimiser and loss function
-                optimizer = torch.optim.Adam(model.model.parameters(), lr=0.001)
-                criterion = torch.nn.BCELoss()
+                # Define optimizer with weight decay for regularization
+                optimizer = torch.optim.Adam(model.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+                
+                # Define learning rate scheduler
+                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                    optimizer, 
+                    mode='min', 
+                    factor=0.5, 
+                    patience=5, 
+                    verbose=True
+                )
+                
+                # Define loss function
+                if use_focal_loss:
+                    # Focal loss for imbalanced data
+                    class FocalLoss(torch.nn.Module):
+                        def __init__(self, alpha=0.25, gamma=2.0, reduction='mean'):
+                            super(FocalLoss, self).__init__()
+                            self.alpha = alpha
+                            self.gamma = gamma
+                            self.reduction = reduction
+                            self.bce = torch.nn.BCELoss(reduction='none')
+                            
+                        def forward(self, inputs, targets):
+                            BCE_loss = self.bce(inputs, targets)
+                            pt = torch.exp(-BCE_loss)
+                            F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
+                            
+                            if self.reduction == 'mean':
+                                return torch.mean(F_loss)
+                            elif self.reduction == 'sum':
+                                return torch.sum(F_loss)
+                            else:
+                                return F_loss
+                    
+                    criterion = FocalLoss(alpha=0.25, gamma=2.0)
+                else:
+                    criterion = torch.nn.BCELoss()
                 
                 # Training loop
                 history = {
                     'loss': [], 
                     'accuracy': [], 
                     'val_loss': [], 
-                    'val_accuracy': []
+                    'val_accuracy': [],
+                    'lr': []
                 }
                 
                 best_val_loss = float('inf')
@@ -650,9 +739,13 @@ def display_model_training():
                     history['accuracy'].append(train_accuracy)
                     history['val_loss'].append(val_loss)
                     history['val_accuracy'].append(val_accuracy)
+                    history['lr'].append(optimizer.param_groups[0]['lr'])
                     
                     # Update progress
                     callback.update(epoch, train_loss, train_accuracy, val_loss, val_accuracy)
+                    
+                    # Update learning rate
+                    scheduler.step(val_loss)
                     
                     # Early stopping
                     if val_loss < best_val_loss:
@@ -681,7 +774,7 @@ def display_model_training():
             # Replace the train method temporarily
             model.train = train_with_progress
             
-            # Train model with progress updates
+            # Train model with progress updates and new parameters
             history = model.train(
                 X_train, y_train, X_val, y_val,
                 advanced=advanced,
@@ -798,11 +891,30 @@ def display_trading_strategy():
             step=0.05,
             format="%.2f"
         ) / 100
+        
+        # Add threshold controls here
+        threshold_method = st.radio(
+            "Signal Threshold Method",
+            options=["Fixed", "Dynamic"],
+            index=1
+        )
+        
+        signal_threshold = 0.5  # Default value
+        if threshold_method == "Fixed":
+            signal_threshold = st.slider(
+                "Signal Threshold",
+                min_value=0.3,
+                max_value=0.7,
+                value=0.5,
+                step=0.05
+            )
+        else:
+            st.info("Using dynamic thresholds based on signal volatility")
     
     # Execute strategy button
     if st.button("Execute Trading Strategy"):
         with st.spinner("Executing trading strategy..."):
-            # Initialise trading strategy
+            # Initialize trading strategy
             strategy = TradingStrategy(
                 initial_capital=initial_capital,
                 transaction_cost=transaction_cost
@@ -811,9 +923,17 @@ def display_trading_strategy():
             # Get test set prices
             test_prices = df.loc[test_dates]['Close'].values
             
-            # Apply trading strategy
+            # Create market data for enhanced strategy (if needed)
+            market_data = None
+            if hasattr(df, 'ATR_14'):
+                market_data = df.loc[test_dates]
+            
+            # Apply trading strategy with threshold option
             strategy_results = strategy.apply_strategy(
-                test_prices, predictions.flatten(), test_dates
+                test_prices, 
+                predictions.flatten(), 
+                test_dates,
+                fixed_threshold=None if threshold_method == "Dynamic" else signal_threshold
             )
             
             # Apply buy and hold benchmark
