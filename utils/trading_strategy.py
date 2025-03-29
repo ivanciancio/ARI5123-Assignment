@@ -202,7 +202,7 @@ class TradingStrategy:
         # Calculate total return
         total_return = (self.portfolio_values[-1] - self.initial_capital) / self.initial_capital
         
-        # Calculate annualized return (assuming 252 trading days per year)
+        # Calculate annualised return (assuming 252 trading days per year)
         annualized_return = ((1 + total_return) ** (252 / len(returns)) - 1) if len(returns) > 0 else 0
         
         # Calculate Sharpe ratio (assuming risk-free rate of 0)

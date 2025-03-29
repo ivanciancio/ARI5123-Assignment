@@ -1,7 +1,7 @@
 """
-Visualization Module
+Visualisation Module
 
-This module provides functions for visualizing trading data, model performance, and strategy results.
+This module provides functions for visualising trading data, model performance, and strategy results.
 """
 
 import matplotlib.pyplot as plt
@@ -66,7 +66,7 @@ def plot_stock_data(data, ticker, start_date=None, end_date=None, figsize=(14, 8
     if 'SMA_50' in df.columns:
         ax1.plot(df.index, df['SMA_50'], label='50-day SMA', color='red', linestyle='--')
     
-    # Customize price plot
+    # Customise price plot
     ax1.set_title(f"{ticker} Stock Price")
     ax1.set_ylabel("Price (£)")
     ax1.grid(True)
@@ -231,7 +231,7 @@ def plot_portfolio_performance(portfolio_values, benchmark_values=None, dates=No
     if benchmark_values is not None:
         ax.plot(x, benchmark_values, label='Buy and Hold', color='green', linestyle='--')
     
-    # Customize plot
+    # Customise plot
     ax.set_title('Portfolio Performance')
     ax.set_ylabel('Portfolio Value (£)')
     ax.set_xlabel('Date' if dates is not None else 'Trading Day')
@@ -436,7 +436,7 @@ def plot_strategy_comparison(strategies_results, figsize=(12, 10)):
                              textcoords="offset points",
                              ha='center', va='bottom')
         
-        # Customize subplot
+        # Customise subplot
         axes[i].set_title(label)
         axes[i].set_ylabel(ylabel)
         axes[i].grid(True, axis='y')
@@ -479,7 +479,7 @@ def plot_feature_importance(model, feature_names, figsize=(10, 8)):
     # Plot feature importance
     sns.barplot(x='Importance', y='Feature', data=importance_df, ax=ax)
     
-    # Customize plot
+    # Customise plot
     ax.set_title('Feature Importance')
     ax.set_xlabel('Importance')
     ax.set_ylabel('Feature')
@@ -610,7 +610,7 @@ def create_performance_report(strategy_results, benchmark_results=None):
 
 def create_improved_architecture_diagram():
     """
-    Create a professional architecture diagram that's compatible with basic matplotlib.
+    Create architecture diagram that's compatible with basic matplotlib.
     
     Returns:
         Matplotlib figure
@@ -625,7 +625,7 @@ def create_improved_architecture_diagram():
     # Remove axes
     ax.axis('off')
     
-    # Define a professional color palette
+    # Define color palette
     primary_color = '#2563EB'      # Royal blue
     secondary_color = '#1E40AF'    # Darker blue
     background_color = '#F1F5F9'   # Very light blue/gray
@@ -634,7 +634,7 @@ def create_improved_architecture_diagram():
     text_light = '#F8FAFC'         # Near white
     arrow_color = '#0369A1'        # Medium blue
     
-    # Component details with professional titles and descriptions
+    # Component details with titles and descriptions
     components = [
         {
             'name': 'Historical Stock Data',
@@ -643,7 +643,7 @@ def create_improved_architecture_diagram():
         },
         {
             'name': 'Data Preprocessing',
-            'desc': 'Normalization & sequence creation',
+            'desc': 'Normalisation & sequence creation',
             'symbol': 'P'
         },
         {

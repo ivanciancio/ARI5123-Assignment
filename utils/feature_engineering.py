@@ -87,7 +87,7 @@ class FeatureEngineer:
         df_features['Price_Change_5d'] = df_features['Close'].pct_change(5)
         df_features['Price_Change_10d'] = df_features['Close'].pct_change(10)
         
-        # Normalized price ratios
+        # Normalised price ratios
         df_features['Close_to_Open'] = df_features['Close'] / df_features['Open']
         df_features['High_to_Low'] = df_features['High'] / df_features['Low']
         

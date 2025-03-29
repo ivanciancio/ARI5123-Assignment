@@ -6,10 +6,10 @@ Convolutional Neural Networks (CNNs) based on the approach from Sezer & Ozbayogl
 
 The system allows users to:
 1. Download historical stock data
-2. Prepare and visualize data
+2. Prepare and visualise data
 3. Train and evaluate CNN models
 4. Apply and compare trading strategies
-5. Visualize performance results
+5. Visualise performance results
 
 Author: Ivan Ciancio
 Date: March 2025
@@ -51,7 +51,7 @@ from utils.visualization import (
     create_performance_report
 )
 
-# Initialize session state (keep this for app functionality)
+# Initialise session state (keep this for app functionality)
 if 'data' not in st.session_state:
     st.session_state.data = None
 if 'prepared_data' not in st.session_state:
@@ -136,7 +136,7 @@ def main():
     """, unsafe_allow_html=True)
     
     # Create sidebar for navigation
-    st.sidebar.title("Navigation")
+    st.sidebar.title("Main Menu")
     
     # Simply show the navigation options without debug info
     page = st.sidebar.radio("Go to", ["Introduction", "Data Preparation", "Model Training", "Trading Strategy", "Performance Analysis", "About"])
@@ -243,7 +243,7 @@ def display_introduction():
     st.markdown('</div>', unsafe_allow_html=True)
 
 def display_data_preparation():
-    """Display data preparation page with data download and visualization."""
+    """Display data preparation page with data download and visualisation."""
     st.markdown('<div class="sub-header">Data Preparation</div>', unsafe_allow_html=True)
     
     # Remove debug info line
@@ -303,7 +303,7 @@ def display_data_preparation():
         # Download button
         if st.button("1. Download Data"):
             with st.spinner("Downloading data..."):
-                # Initialize DataLoader
+                # Initialise DataLoader
                 data_loader = DataLoader()
                 
                 # Download data
@@ -335,7 +335,7 @@ def display_data_preparation():
             if st.session_state.data is not None and selected_ticker in st.session_state.data:
                 with st.spinner("Preparing data for modeling..."):
                     try:
-                        # Initialize feature engineer
+                        # Initialise feature engineer
                         feature_engineer = FeatureEngineer()
                         
                         # Prepare features
@@ -402,14 +402,14 @@ def display_data_preparation():
             else:
                 st.error("Please download data first.")
     
-    # Show data visualization if data is available
+    # Show data visualisation if data is available
     if 'data' in st.session_state and st.session_state.data is not None and selected_ticker in st.session_state.data:
         st.markdown("### Data Visualization")
         
         # Get data for the selected ticker
         ticker_data = st.session_state.data[selected_ticker]
         
-        # Create visualization
+        # Create visualisation
         fig = plot_stock_data(st.session_state.data, selected_ticker)
         st.pyplot(fig)
         
@@ -503,7 +503,7 @@ def display_model_training():
         
         use_early_stopping = st.checkbox("Use Early Stopping", value=True)
     
-    # Initialize model
+    # Initialise model
     input_shape = X_train.shape[1:]
     
     # Create progress bar components ahead of time (but initially hidden)
@@ -512,7 +512,7 @@ def display_model_training():
     # Train model button
     if st.button("Train Model"):
         try:
-            # Initialize model
+            # Initialise model
             model = CNNTradingModel(input_shape)
             
             # Build model
@@ -530,7 +530,7 @@ def display_model_training():
                 progress_bar = st.progress(0)
                 metrics_text = st.empty()
                 
-                # Initialize with starting values
+                # Initialise with starting values
                 progress_text.markdown("**Preparing to train: 0/{} epochs (0%)**".format(epochs))
             
             # Display model summary after the progress elements
@@ -570,7 +570,7 @@ def display_model_training():
             original_train = model.train
             
             def train_with_progress(*args, **kwargs):
-                # Initialize progress
+                # Initialise progress
                 progress_text.markdown("**Training Progress: 0/{} epochs completed (0.0%)**".format(epochs))
                 progress_bar.progress(0)
                 
@@ -587,7 +587,7 @@ def display_model_training():
                 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
                 val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size)
                 
-                # Define optimizer and loss function
+                # Define optimiser and loss function
                 optimizer = torch.optim.Adam(model.model.parameters(), lr=0.001)
                 criterion = torch.nn.BCELoss()
                 
@@ -802,7 +802,7 @@ def display_trading_strategy():
     # Execute strategy button
     if st.button("Execute Trading Strategy"):
         with st.spinner("Executing trading strategy..."):
-            # Initialize trading strategy
+            # Initialise trading strategy
             strategy = TradingStrategy(
                 initial_capital=initial_capital,
                 transaction_cost=transaction_cost
@@ -1066,7 +1066,7 @@ def display_performance_analysis():
         **Recommendations for further improvement:**
         
         1. **Feature Engineering**: Explore additional technical indicators or alternative data sources
-        2. **Model Optimization**: Fine-tune model hyperparameters and architecture
+        2. **Model Optimisation**: Fine-tune model hyperparameters and architecture
         3. **Risk Management**: Implement more sophisticated position sizing and stop-loss mechanisms
         4. **Market Regime Awareness**: Develop filters to avoid trading during unfavorable market conditions
         5. **Ensemble Approaches**: Combine predictions with other models for more robust signals
@@ -1081,7 +1081,7 @@ def display_performance_analysis():
         1. **Model Reevaluation**: Review the model architecture and training process
         2. **Feature Selection**: Identify more predictive features and remove noise
         3. **Trading Rules Refinement**: Adjust entry and exit criteria to improve win rate
-        4. **Transaction Cost Optimization**: Reduce trading frequency to minimize costs
+        4. **Transaction Cost Optimisation**: Reduce trading frequency to minimise costs
         5. **Alternative Approaches**: Consider other AI/ML techniques that may be more suitable
         """)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1115,7 +1115,7 @@ def display_about():
     - **Python**: Core programming language
     - **PyTorch**: Deep learning framework
     - **Pandas/NumPy**: Data manipulation
-    - **Matplotlib/Plotly**: Data visualization
+    - **Matplotlib/Plotly**: Data visualisation
     - **Streamlit**: Web application framework
     - **yfinance**: Financial data API
     
@@ -1132,7 +1132,7 @@ def display_about():
     
     - Incorporate alternative data sources
     - Implement ensemble methods for more robust predictions
-    - Develop adaptive parameter optimization
+    - Develop adaptive parameter optimisation
     - Integrate with live trading APIs
     """)
     st.markdown('</div>', unsafe_allow_html=True)

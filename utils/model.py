@@ -178,7 +178,7 @@ class CNNTradingModel:
     
     def __init__(self, input_shape, model_dir="models"):
         """
-        Initialize the CNN trading model.
+        Initialise the CNN trading model.
         
         Args:
             input_shape: Shape of input data (window_size, features)
@@ -263,7 +263,7 @@ class CNNTradingModel:
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size)
         
-        # Define optimizer and loss function
+        # Define optimiser and loss function
         optimizer = optim.Adam(self.model.parameters(), lr=0.001)
         criterion = nn.BCELoss()
         
@@ -403,7 +403,7 @@ class CNNTradingModel:
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file {model_path} not found")
         
-        # Initialize the model architecture
+        # Initialise the model architecture
         if advanced:
             self.build_advanced_cnn()
         else:
