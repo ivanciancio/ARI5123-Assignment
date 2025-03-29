@@ -28,7 +28,7 @@ from sklearn.metrics import classification_report
 from torchinfo import summary as torch_summary
 import logging
 
-# Configure logging
+# Configure logging - keep this for backend debugging but it won't show in the UI
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ from utils.visualization import (
     create_performance_report
 )
 
-# Initialize session state
+# Initialize session state (keep this for app functionality)
 if 'data' not in st.session_state:
     st.session_state.data = None
 if 'prepared_data' not in st.session_state:
@@ -66,9 +66,6 @@ if 'strategy_results' not in st.session_state:
     st.session_state.strategy_results = None
 if 'benchmark_results' not in st.session_state:
     st.session_state.benchmark_results = None
-
-# Log session state for debugging
-logger.info(f"Session state contains these keys: {list(st.session_state.keys())}")
 
 # Define date format for British English
 DATE_FORMAT = "%d/%m/%Y"
@@ -141,20 +138,7 @@ def main():
     # Create sidebar for navigation
     st.sidebar.title("Navigation")
     
-    # Add debug info to sidebar
-    with st.sidebar.expander("Debug Information", expanded=False):
-        st.write("Session State Keys:")
-        st.write(list(st.session_state.keys()))
-        if 'data' in st.session_state and st.session_state.data is not None:
-            st.write("✅ Raw data loaded")
-        else:
-            st.write("❌ No raw data")
-            
-        if 'prepared_data' in st.session_state and st.session_state.prepared_data is not None:
-            st.write("✅ Data prepared for modeling")
-        else:
-            st.write("❌ Data not prepared")
-    
+    # Simply show the navigation options without debug info
     page = st.sidebar.radio("Go to", ["Introduction", "Data Preparation", "Model Training", "Trading Strategy", "Performance Analysis", "About"])
     
     # Display selected page
@@ -262,9 +246,7 @@ def display_data_preparation():
     """Display data preparation page with data download and visualization."""
     st.markdown('<div class="sub-header">Data Preparation</div>', unsafe_allow_html=True)
     
-    # Debug info
-    logger.info("Displaying data preparation page")
-    logger.info(f"Current session state keys: {list(st.session_state.keys())}")
+    # Remove debug info line
     
     st.markdown('<div class="section">', unsafe_allow_html=True)
     # Download data
@@ -330,8 +312,6 @@ def display_data_preparation():
                 # Store data in session state
                 st.session_state.data = data
                 
-                logger.info(f"Downloaded data for {list(data.keys())}")
-                
                 # Display success message
                 if selected_ticker in data:
                     st.success(f"Successfully downloaded data for {selected_ticker}")
@@ -355,8 +335,6 @@ def display_data_preparation():
             if st.session_state.data is not None and selected_ticker in st.session_state.data:
                 with st.spinner("Preparing data for modeling..."):
                     try:
-                        logger.info(f"Starting data preparation for {selected_ticker}")
-                        
                         # Initialize feature engineer
                         feature_engineer = FeatureEngineer()
                         
@@ -365,8 +343,6 @@ def display_data_preparation():
                             st.session_state.data, 
                             selected_ticker
                         )
-                        
-                        logger.info(f"Generated features with shape: {df_features.shape}")
                         
                         # Create sequences for the model
                         window_size = 30  # Default window size from the paper
@@ -385,8 +361,6 @@ def display_data_preparation():
                         X = np.array(X)
                         y = np.array(y)
                         
-                        logger.info(f"Created sequences with shape: {X.shape}")
-                        
                         # Split data into train, validation, and test sets
                         train_ratio = 0.7
                         val_ratio = 0.15
@@ -400,8 +374,6 @@ def display_data_preparation():
                         X_val, y_val = X[train_size:train_size+val_size], y[train_size:train_size+val_size]
                         X_test, y_test = X[train_size+val_size:], y[train_size+val_size:]
                         
-                        logger.info(f"Train set: {X_train.shape}, Validation set: {X_val.shape}, Test set: {X_test.shape}")
-                        
                         # Store prepared data in session state
                         st.session_state.prepared_data = {
                             'X_train': X_train,
@@ -414,10 +386,7 @@ def display_data_preparation():
                             'window_size': window_size
                         }
                         
-                        logger.info("Data preparation complete and stored in session state")
-                        logger.info(f"Updated session state keys: {list(st.session_state.keys())}")
-                        
-                        # Show success message with session state keys
+                        # Show success message without debug info
                         st.success(f"""
                         Data preparation complete! 
                         - Training set: {X_train.shape[0]} samples
@@ -429,7 +398,6 @@ def display_data_preparation():
                         
                     except Exception as e:
                         st.error(f"Error preparing data: {str(e)}")
-                        logger.error(f"Error in data preparation: {str(e)}", exc_info=True)
                         st.exception(e)
             else:
                 st.error("Please download data first.")
@@ -488,18 +456,9 @@ def display_model_training():
     """Display model training page with model configuration and training."""
     st.markdown('<div class="sub-header">Model Training</div>', unsafe_allow_html=True)
     
-    # Debug info
-    logger.info("Displaying model training page")
-    logger.info(f"Current session state keys: {list(st.session_state.keys())}")
-    if 'prepared_data' in st.session_state:
-        logger.info("prepared_data exists in session state")
-    else:
-        logger.info("prepared_data does NOT exist in session state")
-    
     # Check if data is prepared
     if 'prepared_data' not in st.session_state or st.session_state.prepared_data is None:
         st.warning("Please prepare data first in the 'Data Preparation' section.")
-        st.error(f"No prepared_data found in session state. Available keys: {list(st.session_state.keys())}")
         st.info("Go to the Data Preparation page, download data, and click the 'Prepare Data for Modeling' button.")
         return
     
@@ -547,86 +506,232 @@ def display_model_training():
     # Initialize model
     input_shape = X_train.shape[1:]
     
+    # Create progress bar components ahead of time (but initially hidden)
+    progress_container = st.empty()
+    
     # Train model button
     if st.button("Train Model"):
-        with st.spinner("Training model... This may take a few minutes."):
-            try:
-                logger.info(f"Starting model training with {model_type} architecture")
-                logger.info(f"Input shape: {input_shape}")
+        try:
+            # Initialize model
+            model = CNNTradingModel(input_shape)
+            
+            # Build model
+            if model_type == "Simple CNN":
+                model.build_simple_cnn()
+                advanced = False
+            else:
+                model.build_advanced_cnn()
+                advanced = True
+            
+            # Now show the progress elements before showing the model summary
+            with progress_container.container():
+                st.markdown("#### Training Progress")
+                progress_text = st.empty()
+                progress_bar = st.progress(0)
+                metrics_text = st.empty()
                 
-                # Initialize model
-                model = CNNTradingModel(input_shape)
+                # Initialize with starting values
+                progress_text.markdown("**Preparing to train: 0/{} epochs (0%)**".format(epochs))
+            
+            # Display model summary after the progress elements
+            st.markdown("#### Model Summary")
+            model_summary = []
+            # Create a sample input tensor with the right shape
+            sample_input = torch.zeros((1,) + model.input_shape)
+            summary_str = str(torch_summary(model.model, input_size=sample_input.shape))
+            model_summary.append(summary_str)
+            st.code("\n".join(model_summary))
+            
+            # Custom callback for updating progress
+            class ProgressCallback:
+                def __init__(self, total_epochs):
+                    self.total_epochs = total_epochs
+                    self.current_epoch = 0
                 
-                # Build model
-                if model_type == "Simple CNN":
-                    model.build_simple_cnn()
-                    advanced = False
+                def update(self, epoch, train_loss, train_acc, val_loss, val_acc):
+                    self.current_epoch = epoch
+                    # Update progress bar (convert to 0-1 range)
+                    progress = min(1.0, (epoch + 1) / self.total_epochs)
+                    progress_bar.progress(progress)
+                    # Update text
+                    progress_text.markdown(f"**Training Progress: {epoch+1}/{self.total_epochs} epochs completed ({progress*100:.1f}%)**")
+                    metrics_text.markdown(f"""
+                        **Current metrics:**  
+                        - Training loss: {train_loss:.4f}
+                        - Training accuracy: {train_acc:.2%}
+                        - Validation loss: {val_loss:.4f}
+                        - Validation accuracy: {val_acc:.2%}
+                    """)
+            
+            # Create callback instance
+            callback = ProgressCallback(epochs)
+            
+            # Patch the model's train method to use our progress callback
+            original_train = model.train
+            
+            def train_with_progress(*args, **kwargs):
+                # Initialize progress
+                progress_text.markdown("**Training Progress: 0/{} epochs completed (0.0%)**".format(epochs))
+                progress_bar.progress(0)
+                
+                # Training and validation datasets
+                X_train_tensor = torch.tensor(X_train, dtype=torch.float32).to(model.device)
+                y_train_tensor = torch.tensor(y_train, dtype=torch.float32).unsqueeze(1).to(model.device)
+                X_val_tensor = torch.tensor(X_val, dtype=torch.float32).to(model.device)
+                y_val_tensor = torch.tensor(y_val, dtype=torch.float32).unsqueeze(1).to(model.device)
+                
+                # Create datasets and dataloaders
+                train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
+                val_dataset = torch.utils.data.TensorDataset(X_val_tensor, y_val_tensor)
+                
+                train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+                val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size)
+                
+                # Define optimizer and loss function
+                optimizer = torch.optim.Adam(model.model.parameters(), lr=0.001)
+                criterion = torch.nn.BCELoss()
+                
+                # Training loop
+                history = {
+                    'loss': [], 
+                    'accuracy': [], 
+                    'val_loss': [], 
+                    'val_accuracy': []
+                }
+                
+                best_val_loss = float('inf')
+                patience = 10 if use_early_stopping else epochs
+                patience_counter = 0
+                best_model_state = None
+                
+                for epoch in range(epochs):
+                    # Training phase
+                    model.model.train()
+                    train_loss = 0
+                    correct_train = 0
+                    total_train = 0
+                    
+                    for batch_X, batch_y in train_loader:
+                        optimizer.zero_grad()
+                        outputs = model.model(batch_X)
+                        loss = criterion(outputs, batch_y)
+                        loss.backward()
+                        optimizer.step()
+                        
+                        train_loss += loss.item()
+                        predicted = (outputs > 0.5).float()
+                        total_train += batch_y.size(0)
+                        correct_train += (predicted == batch_y).sum().item()
+                    
+                    train_loss /= len(train_loader)
+                    train_accuracy = correct_train / total_train
+                    
+                    # Validation phase
+                    model.model.eval()
+                    val_loss = 0
+                    correct_val = 0
+                    total_val = 0
+                    
+                    with torch.no_grad():
+                        for batch_X, batch_y in val_loader:
+                            outputs = model.model(batch_X)
+                            loss = criterion(outputs, batch_y)
+                            
+                            val_loss += loss.item()
+                            predicted = (outputs > 0.5).float()
+                            total_val += batch_y.size(0)
+                            correct_val += (predicted == batch_y).sum().item()
+                    
+                    val_loss /= len(val_loader)
+                    val_accuracy = correct_val / total_val
+                    
+                    # Record history
+                    history['loss'].append(train_loss)
+                    history['accuracy'].append(train_accuracy)
+                    history['val_loss'].append(val_loss)
+                    history['val_accuracy'].append(val_accuracy)
+                    
+                    # Update progress
+                    callback.update(epoch, train_loss, train_accuracy, val_loss, val_accuracy)
+                    
+                    # Early stopping
+                    if val_loss < best_val_loss:
+                        best_val_loss = val_loss
+                        patience_counter = 0
+                        best_model_state = model.model.state_dict().copy()
+                    else:
+                        patience_counter += 1
+                        if patience_counter >= patience and use_early_stopping:
+                            metrics_text.markdown(f"**Early stopping triggered after {epoch+1} epochs**")
+                            break
+                
+                # Restore best model
+                if best_model_state is not None:
+                    model.model.load_state_dict(best_model_state)
+                
+                # Set final progress
+                progress_bar.progress(1.0)
+                if use_early_stopping and patience_counter >= patience:
+                    progress_text.markdown(f"**Training Complete: Stopped early at {epoch+1}/{epochs} epochs**")
                 else:
-                    model.build_advanced_cnn()
-                    advanced = True
+                    progress_text.markdown(f"**Training Complete: {epochs}/{epochs} epochs**")
                 
-                # Display model summary
-                st.markdown("#### Model Summary")
-                model_summary = []
-                # Create a sample input tensor with the right shape
-                sample_input = torch.zeros((1,) + model.input_shape)
-                summary_str = str(torch_summary(model.model, input_size=sample_input.shape))
-                model_summary.append(summary_str)
-                st.code("\n".join(model_summary))
-                
-                # Train model
-                logger.info(f"Training model with {epochs} epochs and batch size {batch_size}")
-                history = model.train(
-                    X_train, y_train, X_val, y_val,
-                    advanced=advanced,
-                    epochs=epochs,
-                    batch_size=batch_size
-                )
-                
-                # Store model and history in session state
-                st.session_state.model = model
-                st.session_state.history = history
-                
-                logger.info("Model training completed")
-                logger.info(f"Updated session state keys: {list(st.session_state.keys())}")
-                
-                # Display training plots
-                st.markdown("#### Training History")
-                fig = plot_model_training_history(history)
-                st.pyplot(fig)
-                
-                # Evaluate model
-                st.markdown("#### Model Evaluation")
-                
-                # Make predictions
-                y_pred_prob = model.predict(X_test)
-                st.session_state.predictions = y_pred_prob
-                
-                # Display evaluation metrics
-                metrics = model.evaluate(X_test, y_test)
-                
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Accuracy", f"{metrics['accuracy']:.2%}")
-                with col2:
-                    st.metric("Precision", f"{metrics['precision']:.2%}")
-                with col3:
-                    st.metric("Recall", f"{metrics['recall']:.2%}")
-                with col4:
-                    st.metric("F1 Score", f"{metrics['f1_score']:.2%}")
-                
-                # Display evaluation plots
-                fig = plot_model_evaluation(y_test, y_pred_prob)
-                st.pyplot(fig)
-                
-                # Save model
-                model.save(f"{ticker}_model")
-                st.success(f"Model trained and saved as {ticker}_model.h5")
-                
-            except Exception as e:
-                st.error(f"Error training model: {str(e)}")
-                logger.error(f"Error in model training: {str(e)}", exc_info=True)
-                st.exception(e)
+                return history
+            
+            # Replace the train method temporarily
+            model.train = train_with_progress
+            
+            # Train model with progress updates
+            history = model.train(
+                X_train, y_train, X_val, y_val,
+                advanced=advanced,
+                epochs=epochs,
+                batch_size=batch_size
+            )
+            
+            # Restore original train method
+            model.train = original_train
+            
+            # Store model and history in session state
+            st.session_state.model = model
+            st.session_state.history = history
+            
+            # Display training plots
+            st.markdown("#### Training History")
+            fig = plot_model_training_history(history)
+            st.pyplot(fig)
+            
+            # Evaluate model
+            st.markdown("#### Model Evaluation")
+            
+            # Make predictions
+            y_pred_prob = model.predict(X_test)
+            st.session_state.predictions = y_pred_prob
+            
+            # Display evaluation metrics
+            metrics = model.evaluate(X_test, y_test)
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Accuracy", f"{metrics['accuracy']:.2%}")
+            with col2:
+                st.metric("Precision", f"{metrics['precision']:.2%}")
+            with col3:
+                st.metric("Recall", f"{metrics['recall']:.2%}")
+            with col4:
+                st.metric("F1 Score", f"{metrics['f1_score']:.2%}")
+            
+            # Display evaluation plots
+            fig = plot_model_evaluation(y_test, y_pred_prob)
+            st.pyplot(fig)
+            
+            # Save model
+            model.save(f"{ticker}_model")
+            st.success(f"Model trained and saved as {ticker}_model.h5")
+            
+        except Exception as e:
+            st.error(f"Error training model: {str(e)}")
+            st.exception(e)
     
     st.markdown('</div>', unsafe_allow_html=True)
 
