@@ -2,7 +2,7 @@
 CNN Model Module (PyTorch Version)
 
 This module defines the Convolutional Neural Network (CNN) model for stock trading.
-The implementation is inspired by Sezer & Ozbayoglu (2018) but with modern enhancements.
+Implements approach from Sezer & Ozbayoglu (2018) paper.
 """
 
 import torch
@@ -12,131 +12,108 @@ import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 import numpy as np
 import os
-import joblib
 import logging
 
 logger = logging.getLogger(__name__)
 
 class SimpleCNN(nn.Module):
     """
-    Simple CNN model similar to the one in Sezer & Ozbayoglu (2018).
+    Simple CNN model following the architecture in Sezer & Ozbayoglu (2018).
+    This is a 2D CNN for bar chart images with dynamic size handling.
     """
-    def __init__(self, input_shape):
+    def __init__(self):
         super(SimpleCNN, self).__init__()
-        # input_shape should be (sequence_length, features)
-        self.conv1 = nn.Conv1d(in_channels=input_shape[1], out_channels=64, kernel_size=3)
-        self.pool1 = nn.MaxPool1d(kernel_size=2)
+        # Input is 1 channel image
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3)
+        self.pool1 = nn.MaxPool2d(kernel_size=2)
         self.dropout1 = nn.Dropout(0.2)
         
-        self.conv2 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3)
-        self.pool2 = nn.MaxPool1d(kernel_size=2)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
+        self.pool2 = nn.MaxPool2d(kernel_size=2)
         self.dropout2 = nn.Dropout(0.2)
         
-        # Calculate size after convolutions and pooling
-        self.flatten_size = self._get_flatten_size(input_shape)
-        
-        self.fc1 = nn.Linear(self.flatten_size, 64)
+        # We'll define the fc1 layer in the forward pass
+        self.fc1 = None
         self.dropout3 = nn.Dropout(0.3)
-        self.fc2 = nn.Linear(64, 1)
+        self.fc2 = nn.Linear(128, 3)  # 3 classes: Buy, Hold, Sell
         
-    def _get_flatten_size(self, input_shape):
-        # Calculate the size of the flattened features after convolutions
-        x = torch.zeros(1, input_shape[1], input_shape[0])
-        x = self.pool1(F.relu(self.conv1(x)))
-        x = self.pool2(F.relu(self.conv2(x)))
-        return x.numel()
-    
     def forward(self, x):
-        # Transpose input from [batch, seq_len, features] to [batch, features, seq_len]
-        x = x.permute(0, 2, 1)
+        # Ensure input is in the right shape [batch, channels, height, width]
+        if len(x.shape) == 3:  # [batch, height, width]
+            x = x.unsqueeze(1)  # Add channel dimension
+        elif len(x.shape) == 2:  # [height, width]
+            x = x.unsqueeze(0).unsqueeze(0)  # Add batch and channel dimensions
         
+        # First convolutional block
         x = F.relu(self.conv1(x))
         x = self.pool1(x)
         x = self.dropout1(x)
         
+        # Second convolutional block
         x = F.relu(self.conv2(x))
         x = self.pool2(x)
         x = self.dropout2(x)
         
-        x = x.view(x.size(0), -1)  # Flatten
+        # Flatten
+        x_flat = x.view(x.size(0), -1)
         
-        x = F.relu(self.fc1(x))
+        # Create fc1 layer if it doesn't exist yet
+        if self.fc1 is None:
+            self.fc1 = nn.Linear(x_flat.shape[1], 128).to(x.device)
+        
+        # Fully connected layers
+        x = F.relu(self.fc1(x_flat))
         x = self.dropout3(x)
-        x = torch.sigmoid(self.fc2(x))
+        x = self.fc2(x)
         
-        return x
-
-class SelfAttention(nn.Module):
-    """
-    Self-attention mechanism for time series data.
-    """
-    def __init__(self, input_dim):
-        super(SelfAttention, self).__init__()
-        self.query = nn.Linear(input_dim, input_dim)
-        self.key = nn.Linear(input_dim, input_dim)
-        self.value = nn.Linear(input_dim, input_dim)
-        self.scale = torch.sqrt(torch.tensor(input_dim, dtype=torch.float32))
-    
-    def forward(self, x):
-        # x shape: [batch, seq_len, features]
-        q = self.query(x)
-        k = self.key(x)
-        v = self.value(x)
-        
-        # Compute attention scores
-        scores = torch.matmul(q, k.transpose(-2, -1)) / self.scale
-        attention = F.softmax(scores, dim=-1)
-        
-        # Apply attention weights
-        output = torch.matmul(attention, v)
-        return output
+        return F.softmax(x, dim=1)  # Output probabilities for 3 classes
 
 class AdvancedCNN(nn.Module):
     """
-    Advanced CNN model with residual connections and improved attention mechanisms.
+    Advanced CNN model with residual connections and attention mechanisms.
+    This extends the base model from the paper with modern enhancements.
     """
-    def __init__(self, input_shape):
+    def __init__(self):
         super(AdvancedCNN, self).__init__()
-        # input_shape should be (sequence_length, features)
         
-        # Initial convolution block
-        self.conv1 = nn.Conv1d(in_channels=input_shape[1], out_channels=64, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm1d(64)
-        self.pool1 = nn.MaxPool1d(kernel_size=2)
+        # Input is 1 channel 30x30 image
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.pool1 = nn.MaxPool2d(kernel_size=2)
         
         # Residual block 1
-        self.res_conv1a = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
-        self.res_bn1a = nn.BatchNorm1d(128)
-        self.res_conv1b = nn.Conv1d(in_channels=128, out_channels=128, kernel_size=3, padding=1)
-        self.res_bn1b = nn.BatchNorm1d(128)
-        self.shortcut1 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=1)
+        self.res_conv1a = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.res_bn1a = nn.BatchNorm2d(64)
+        self.res_conv1b = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        self.res_bn1b = nn.BatchNorm2d(64)
+        self.shortcut1 = nn.Conv2d(32, 64, kernel_size=1)
         
         # Pooling after residual block
-        self.pool2 = nn.MaxPool1d(kernel_size=2)
+        self.pool2 = nn.MaxPool2d(kernel_size=2)
         
         # Residual block 2
-        self.res_conv2a = nn.Conv1d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
-        self.res_bn2a = nn.BatchNorm1d(256)
-        self.res_conv2b = nn.Conv1d(in_channels=256, out_channels=256, kernel_size=3, padding=1)
-        self.res_bn2b = nn.BatchNorm1d(256)
-        self.shortcut2 = nn.Conv1d(in_channels=128, out_channels=256, kernel_size=1)
-        
-        # Multi-head self-attention
-        self.mha = nn.MultiheadAttention(embed_dim=256, num_heads=4)
+        self.res_conv2a = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.res_bn2a = nn.BatchNorm2d(128)
+        self.res_conv2b = nn.Conv2d(128, 128, kernel_size=3, padding=1)
+        self.res_bn2b = nn.BatchNorm2d(128)
+        self.shortcut2 = nn.Conv2d(64, 128, kernel_size=1)
         
         # Global average pooling
-        self.gap = nn.AdaptiveAvgPool1d(1)
+        self.gap = nn.AdaptiveAvgPool2d(1)
         
         # Fully connected layers with dropout
-        self.fc1 = nn.Linear(256, 128)
-        self.dropout1 = nn.Dropout(0.5)  # Increased dropout for better regularization
+        self.fc1 = nn.Linear(128, 128)
+        self.dropout1 = nn.Dropout(0.5)
         self.fc2 = nn.Linear(128, 64)
         self.dropout2 = nn.Dropout(0.3)
-        self.fc3 = nn.Linear(64, 1)
+        self.fc3 = nn.Linear(64, 3)  # 3 classes: Buy, Hold, Sell
     
     def forward(self, x):
-        # Transpose input from [batch, seq_len, features] to [batch, features, seq_len]
-        x = x.permute(0, 2, 1)
+        # Ensure input is in the right shape [batch, channels, height, width]
+        if len(x.shape) == 3:  # [batch, height, width]
+            x = x.unsqueeze(1)  # Add channel dimension
+        elif len(x.shape) == 2:  # [height, width]
+            x = x.unsqueeze(0).unsqueeze(0)  # Add batch and channel dimensions
         
         # Initial convolution
         x = self.conv1(x)
@@ -165,46 +142,37 @@ class AdvancedCNN(nn.Module):
         x = x + residual  # Skip connection
         x = F.relu(x)
         
-        # Reshape for attention [seq_len, batch, channels]
-        x_att = x.permute(2, 0, 1)
-        
-        # Apply multi-head attention
-        x_att, _ = self.mha(x_att, x_att, x_att)
-        
-        # Back to [batch, channels, seq_len]
-        x = x_att.permute(1, 2, 0)
-        
         # Global average pooling
-        x = self.gap(x).squeeze(-1)
+        x = self.gap(x).squeeze(-1).squeeze(-1)
         
         # Fully connected layers with dropout
         x = F.relu(self.fc1(x))
         x = self.dropout1(x)
         x = F.relu(self.fc2(x))
         x = self.dropout2(x)
-        x = torch.sigmoid(self.fc3(x))
+        x = self.fc3(x)
         
-        return x
+        return F.softmax(x, dim=1)  # Output probabilities for 3 classes
 
 class CNNTradingModel:
     """
     CNN-based trading model with PyTorch implementation.
+    Follows the approach from Sezer & Ozbayoglu (2018).
     """
     
-    def __init__(self, input_shape, model_dir="models"):
+    def __init__(self, input_shape=None, model_dir="models"):
         """
-        Initialise the CNN trading model.
+        Initialize the CNN trading model.
         
         Args:
-            input_shape: Shape of input data (window_size, features)
+            input_shape: Shape of input data (optional, default is 30x30)
             model_dir: Directory to save trained models
         """
-        self.input_shape = input_shape
+        self.input_shape = input_shape if input_shape else (30, 30)
         self.model_dir = model_dir
         self.model = None
         
         # Modified device selection for cloud environment compatibility
-        # This avoids issues with CUDA availability in cloud environments
         try:
             if torch.cuda.is_available():
                 self.device = torch.device("cuda")
@@ -214,20 +182,70 @@ class CNNTradingModel:
             # Fallback to CPU if there are any issues with CUDA detection
             self.device = torch.device("cpu")
             
-        print(f"Using device: {self.device}")
-        
+                
         # Create model directory if it doesn't exist
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
     
     def build_simple_cnn(self):
         """
-        Build a simple CNN model similar to the one in Sezer & Ozbayoglu (2018).
+        Build a simple CNN model following Sezer & Ozbayoglu (2018).
         
         Returns:
             Compiled CNN model
         """
-        model = SimpleCNN(self.input_shape).to(self.device)
+        # Create a fixed version of SimpleCNN that properly handles channel dimensions
+        class FixedSimpleCNN(nn.Module):
+            def __init__(self):
+                super(FixedSimpleCNN, self).__init__()
+                # Input is 1 channel image
+                self.conv1 = nn.Conv2d(1, 32, kernel_size=3)
+                self.pool1 = nn.MaxPool2d(kernel_size=2)
+                self.dropout1 = nn.Dropout(0.2)
+                
+                # Second conv layer takes 32 input channels (output from first conv)
+                self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
+                self.pool2 = nn.MaxPool2d(kernel_size=2)
+                self.dropout2 = nn.Dropout(0.2)
+                
+                # We'll define the fc1 layer in the forward pass
+                self.fc1 = None
+                self.dropout3 = nn.Dropout(0.3)
+                self.fc2 = nn.Linear(128, 3)  # 3 classes: Buy, Hold, Sell
+                
+            def forward(self, x):
+                # Ensure input is in the right shape [batch, channels, height, width]
+                if len(x.shape) == 3:  # [batch, height, width]
+                    x = x.unsqueeze(1)  # Add channel dimension
+                elif len(x.shape) == 2:  # [height, width]
+                    x = x.unsqueeze(0).unsqueeze(0)  # Add batch and channel dimensions
+                
+                # First convolutional block
+                x = F.relu(self.conv1(x))
+                x = self.pool1(x)
+                x = self.dropout1(x)
+                
+                # Second convolutional block
+                x = F.relu(self.conv2(x))
+                x = self.pool2(x)
+                x = self.dropout2(x)
+                
+                # Flatten
+                x_flat = x.view(x.size(0), -1)
+                
+                # Create fc1 layer if it doesn't exist yet
+                if self.fc1 is None:
+                    self.fc1 = nn.Linear(x_flat.shape[1], 128).to(x.device)
+                
+                # Fully connected layers
+                x = F.relu(self.fc1(x_flat))
+                x = self.dropout3(x)
+                x = self.fc2(x)
+                
+                return F.softmax(x, dim=1)  # Output probabilities for 3 classes
+        
+        # Use the fixed model
+        model = FixedSimpleCNN().to(self.device)
         self.model = model
         return model
     
@@ -238,17 +256,17 @@ class CNNTradingModel:
         Returns:
             Compiled advanced CNN model
         """
-        model = AdvancedCNN(self.input_shape).to(self.device)
+        model = AdvancedCNN().to(self.device)
         self.model = model
         return model
     
-    def train(self, X_train, y_train, X_val, y_val, advanced=True, epochs=50, batch_size=32):
+    def train(self, X_train, y_train, X_val, y_val, advanced=False, epochs=50, batch_size=32):
         """
-        Train the CNN model with improved process.
+        Train the CNN model.
         
         Args:
-            X_train: Training data
-            y_train: Training labels
+            X_train: Training data (images)
+            y_train: Training labels (0=Hold, 1=Buy, 2=Sell)
             X_val: Validation data
             y_val: Validation labels
             advanced: Whether to use the advanced CNN model
@@ -265,39 +283,209 @@ class CNNTradingModel:
             else:
                 self.build_simple_cnn()
         
-        # Calculate class weights for imbalanced data
-        class_counts = np.bincount(y_train.astype(int))
-        total_samples = len(y_train)
-        class_weights = {
-            0: total_samples / (2 * class_counts[0]) if class_counts[0] > 0 else 1.0,
-            1: total_samples / (2 * class_counts[1]) if class_counts[1] > 0 else 1.0
+        # Convert labels to one-hot encoding if they're not already
+        if len(y_train.shape) == 1 or y_train.shape[1] == 1:
+            # Convert labels to integers
+            y_train = y_train.astype(int)
+            y_val = y_val.astype(int)
+            
+            # Create one-hot encoded labels
+            y_train_one_hot = np.zeros((y_train.shape[0], 3))
+            y_train_one_hot[np.arange(y_train.shape[0]), y_train] = 1
+            
+            y_val_one_hot = np.zeros((y_val.shape[0], 3))
+            y_val_one_hot[np.arange(y_val.shape[0]), y_val] = 1
+        else:
+            # Already one-hot encoded
+            y_train_one_hot = y_train
+            y_val_one_hot = y_val
+        
+        # Call the improved training function
+        return self._train_model(
+            X_train, y_train_one_hot, X_val, y_val_one_hot,
+            epochs=epochs,
+            batch_size=batch_size
+        )
+    
+    def _train_model(self, X_train, y_train, X_val, y_val, epochs=50, batch_size=32, learning_rate=0.001):
+        """
+        Internal method to train the model with proper setup.
+        
+        Args:
+            X_train: Training data
+            y_train: Training labels (one-hot encoded)
+            X_val: Validation data
+            y_val: Validation labels (one-hot encoded)
+            epochs: Number of training epochs
+            batch_size: Batch size for training
+            learning_rate: Learning rate for optimizer
+            
+        Returns:
+            Training history
+        """
+        # Convert numpy arrays to PyTorch tensors
+        X_train_tensor = torch.tensor(X_train, dtype=torch.float32).to(self.device)
+        y_train_tensor = torch.tensor(y_train, dtype=torch.float32).to(self.device)
+        X_val_tensor = torch.tensor(X_val, dtype=torch.float32).to(self.device)
+        y_val_tensor = torch.tensor(y_val, dtype=torch.float32).to(self.device)
+        
+        # Reshape data if needed to match CNN input requirements
+        if len(X_train.shape) == 3:  # [samples, height, width]
+            # Already in correct shape for our model
+            pass
+        elif len(X_train.shape) == 4 and X_train.shape[1] == 1:  # [samples, channels, height, width]
+            # Already in correct shape with channel dimension
+            pass
+        else:
+            # Reshape if necessary - this is a fallback
+            X_train_tensor = X_train_tensor.reshape(-1, 1, self.input_shape[0], self.input_shape[1])
+            X_val_tensor = X_val_tensor.reshape(-1, 1, self.input_shape[0], self.input_shape[1])
+        
+        # Create datasets and dataloaders
+        train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+        val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
+        
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size)
+        
+        # Define optimizer
+        optimizer = optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=1e-5)
+        
+        # Define learning rate scheduler
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, 
+            mode='min', 
+            factor=0.5, 
+            patience=5, 
+            verbose=True
+        )
+        
+        # Define loss function - Cross Entropy for multi-class classification
+        criterion = nn.CrossEntropyLoss()
+        
+        # Training loop
+        history = {
+            'loss': [], 
+            'accuracy': [], 
+            'val_loss': [], 
+            'val_accuracy': [],
+            'lr': []
         }
         
-        # Use the improved training process
-        return train_with_improved_process(
-            self, X_train, y_train, X_val, y_val,
-            batch_size=batch_size,
-            epochs=epochs,
-            learning_rate=0.001,
-            early_stopping=True,
-            class_weights=class_weights
-        )
+        best_val_loss = float('inf')
+        patience = 10  # For early stopping
+        patience_counter = 0
+        best_model_state = None
+        
+        for epoch in range(epochs):
+            # Training phase
+            self.model.train()
+            train_loss = 0
+            correct_train = 0
+            total_train = 0
+            
+            for batch_X, batch_y in train_loader:
+                # Forward pass
+                optimizer.zero_grad()
+                outputs = self.model(batch_X)
+                loss = criterion(outputs, torch.max(batch_y, 1)[1])  # CrossEntropyLoss needs class indices
+                
+                # Backward pass and optimize
+                loss.backward()
+                optimizer.step()
+                
+                # Accumulate statistics
+                train_loss += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                _, targets = torch.max(batch_y, 1)
+                total_train += targets.size(0)
+                correct_train += (predicted == targets).sum().item()
+            
+            # Calculate average training metrics
+            train_loss /= len(train_loader)
+            train_accuracy = correct_train / total_train
+            
+            # Validation phase
+            self.model.eval()
+            val_loss = 0
+            correct_val = 0
+            total_val = 0
+            
+            with torch.no_grad():
+                for batch_X, batch_y in val_loader:
+                    outputs = self.model(batch_X)
+                    loss = criterion(outputs, torch.max(batch_y, 1)[1])  # CrossEntropyLoss needs class indices
+                    
+                    val_loss += loss.item()
+                    _, predicted = torch.max(outputs.data, 1)
+                    _, targets = torch.max(batch_y, 1)
+                    total_val += targets.size(0)
+                    correct_val += (predicted == targets).sum().item()
+            
+            # Calculate average validation metrics
+            val_loss /= len(val_loader)
+            val_accuracy = correct_val / total_val
+            
+            # Record history
+            history['loss'].append(train_loss)
+            history['accuracy'].append(train_accuracy)
+            history['val_loss'].append(val_loss)
+            history['val_accuracy'].append(val_accuracy)
+            history['lr'].append(optimizer.param_groups[0]['lr'])
+            
+            # Update learning rate
+            scheduler.step(val_loss)
+            
+            # Print progress
+            logger.info(f'Epoch {epoch+1}/{epochs} - '
+                  f'loss: {train_loss:.4f} - accuracy: {train_accuracy:.4f} - '
+                  f'val_loss: {val_loss:.4f} - val_accuracy: {val_accuracy:.4f} - '
+                  f'lr: {optimizer.param_groups[0]["lr"]:.6f}')
+            
+            # Early stopping
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                patience_counter = 0
+                best_model_state = self.model.state_dict().copy()
+            else:
+                patience_counter += 1
+                if patience_counter >= patience:
+                    break
+        
+        # Restore best model
+        if best_model_state is not None:
+            self.model.load_state_dict(best_model_state)
+        
+        return history
     
     def predict(self, X):
         """
         Make predictions with the trained model.
         
         Args:
-            X: Input data
+            X: Input data (images)
             
         Returns:
-            Predicted probabilities
+            Predicted probabilities for each class [Hold, Buy, Sell]
         """
         if self.model is None:
             raise ValueError("Model has not been built and trained yet")
         
         # Convert numpy array to PyTorch tensor
         X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
+        
+        # Reshape data if needed
+        if len(X.shape) == 3:  # [samples, height, width]
+            # Already in correct shape for our model
+            pass
+        elif len(X.shape) == 4 and X.shape[1] == 1:  # [samples, channels, height, width]
+            # Already in correct shape with channel dimension
+            pass
+        elif len(X.shape) == 2:  # Single image [height, width]
+            X_tensor = X_tensor.unsqueeze(0)  # Add batch dimension
+        else:
+            # Reshape if necessary - this is a fallback
+            X_tensor = X_tensor.reshape(-1, 1, self.input_shape[0], self.input_shape[1])
         
         # Make predictions
         self.model.eval()
@@ -321,7 +509,7 @@ class CNNTradingModel:
         torch.save(self.model.state_dict(), model_path)
         logger.info(f"Model saved to {model_path}")
     
-    def load(self, filename, advanced=True):
+    def load(self, filename, advanced=False):
         """
         Load a trained model.
         
@@ -333,7 +521,7 @@ class CNNTradingModel:
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file {model_path} not found")
         
-        # Initialise the model architecture
+        # Initialize the model architecture
         if advanced:
             self.build_advanced_cnn()
         else:
@@ -362,231 +550,44 @@ class CNNTradingModel:
         
         # Get model predictions
         y_pred_prob = self.predict(X_test)
-        y_pred = (y_pred_prob > 0.5).astype(int).flatten()
+        y_pred = np.argmax(y_pred_prob, axis=1)
+        
+        # Ensure y_test is in the right format
+        if len(y_test.shape) > 1 and y_test.shape[1] > 1:
+            # Convert one-hot encoded labels to class indices
+            y_test = np.argmax(y_test, axis=1)
+        else:
+            y_test = y_test.flatten()
         
         # Calculate metrics
         accuracy = np.mean(y_pred == y_test)
-        tp = np.sum((y_pred == 1) & (y_test == 1))
-        fp = np.sum((y_pred == 1) & (y_test == 0))
-        tn = np.sum((y_pred == 0) & (y_test == 0))
-        fn = np.sum((y_pred == 0) & (y_test == 1))
         
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+        # Calculate other metrics by class
+        metrics = {
+            'accuracy': accuracy,
+            'class_metrics': {}
+        }
+        
+        # Calculate class-specific metrics
+        for class_idx in range(3):  # 0=Hold, 1=Buy, 2=Sell
+            # Calculate TP, FP, TN, FN for this class
+            true_positives = np.sum((y_pred == class_idx) & (y_test == class_idx))
+            false_positives = np.sum((y_pred == class_idx) & (y_test != class_idx))
+            true_negatives = np.sum((y_pred != class_idx) & (y_test != class_idx))
+            false_negatives = np.sum((y_pred != class_idx) & (y_test == class_idx))
+            
+            # Calculate metrics
+            precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
+            recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
+            f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+            
+            # Store metrics
+            class_name = ['Hold', 'Buy', 'Sell'][class_idx]
+            metrics['class_metrics'][class_name] = {
+                'precision': precision,
+                'recall': recall,
+                'f1_score': f1
+            }
         
         # Return metrics
-        return {
-            'accuracy': accuracy,
-            'precision': precision,
-            'recall': recall,
-            'f1_score': f1
-        }
-
-def train_with_improved_process(model, X_train, y_train, X_val, y_val, 
-                          batch_size=32, epochs=50, learning_rate=0.001, 
-                          early_stopping=True, class_weights=None):
-    """
-    Train a CNN model with improved training techniques.
-    
-    Args:
-        model: PyTorch model
-        X_train: Training features
-        y_train: Training labels
-        X_val: Validation features
-        y_val: Validation labels
-        batch_size: Batch size for training
-        epochs: Number of training epochs
-        learning_rate: Base learning rate
-        early_stopping: Whether to use early stopping
-        class_weights: Optional weights for imbalanced classes
-        
-    Returns:
-        Dictionary with training history
-    """
-    # Convert numpy arrays to PyTorch tensors
-    X_train_tensor = torch.tensor(X_train, dtype=torch.float32).to(model.device)
-    y_train_tensor = torch.tensor(y_train, dtype=torch.float32).unsqueeze(1).to(model.device)
-    X_val_tensor = torch.tensor(X_val, dtype=torch.float32).to(model.device)
-    y_val_tensor = torch.tensor(y_val, dtype=torch.float32).unsqueeze(1).to(model.device)
-    
-    # Create datasets and dataloaders
-    train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
-    val_dataset = torch.utils.data.TensorDataset(X_val_tensor, y_val_tensor)
-    
-    # Use weighted sampler if class weights are provided
-    if class_weights is not None:
-        # Calculate sample weights based on class weights
-        sample_weights = torch.zeros(len(y_train))
-        for idx, y in enumerate(y_train):
-            sample_weights[idx] = class_weights[int(y)]
-        
-        # Create weighted sampler
-        sampler = torch.utils.data.WeightedRandomSampler(
-            weights=sample_weights,
-            num_samples=len(sample_weights),
-            replacement=True
-        )
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset, 
-            batch_size=batch_size, 
-            sampler=sampler
-        )
-    else:
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset, 
-            batch_size=batch_size, 
-            shuffle=True
-        )
-    
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size)
-    
-    # Define optimizer with weight decay for regularization
-    optimizer = torch.optim.Adam(model.model.parameters(), lr=learning_rate, weight_decay=1e-5)
-    
-    # Define learning rate scheduler
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, 
-        mode='min', 
-        factor=0.5, 
-        patience=5, 
-        verbose=True
-    )
-    
-    # Define focal loss for imbalanced data
-    class FocalLoss(torch.nn.Module):
-        def __init__(self, alpha=0.25, gamma=2.0, reduction='mean'):
-            super(FocalLoss, self).__init__()
-            self.alpha = alpha
-            self.gamma = gamma
-            self.reduction = reduction
-            self.bce = torch.nn.BCELoss(reduction='none')
-            
-        def forward(self, inputs, targets):
-            BCE_loss = self.bce(inputs, targets)
-            pt = torch.exp(-BCE_loss)
-            F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
-            
-            if self.reduction == 'mean':
-                return torch.mean(F_loss)
-            elif self.reduction == 'sum':
-                return torch.sum(F_loss)
-            else:
-                return F_loss
-    
-    # Use focal loss for better handling of imbalanced data
-    criterion = FocalLoss(alpha=0.25, gamma=2.0)
-    
-    # Training loop
-    history = {
-        'loss': [], 
-        'accuracy': [], 
-        'val_loss': [], 
-        'val_accuracy': [],
-        'lr': []
-    }
-    
-    best_val_loss = float('inf')
-    patience = 10
-    patience_counter = 0
-    best_model_state = None
-    
-    # Use automatic mixed precision for faster training
-    scaler = torch.cuda.amp.GradScaler() if torch.cuda.is_available() else None
-    
-    for epoch in range(epochs):
-        # Training phase
-        model.model.train()
-        train_loss = 0
-        correct_train = 0
-        total_train = 0
-        
-        for batch_X, batch_y in train_loader:
-            optimizer.zero_grad()
-            
-            if scaler is not None:
-                # Use automatic mixed precision
-                with torch.cuda.amp.autocast():
-                    outputs = model.model(batch_X)
-                    loss = criterion(outputs, batch_y)
-                
-                # Scale gradients and optimize
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                # Standard training
-                outputs = model.model(batch_X)
-                loss = criterion(outputs, batch_y)
-                loss.backward()
-                optimizer.step()
-            
-            train_loss += loss.item()
-            predicted = (outputs > 0.5).float()
-            total_train += batch_y.size(0)
-            correct_train += (predicted == batch_y).sum().item()
-        
-        train_loss /= len(train_loader)
-        train_accuracy = correct_train / total_train
-        
-        # Validation phase
-        model.model.eval()
-        val_loss = 0
-        correct_val = 0
-        total_val = 0
-        y_true = []
-        y_pred = []
-        
-        with torch.no_grad():
-            for batch_X, batch_y in val_loader:
-                outputs = model.model(batch_X)
-                loss = criterion(outputs, batch_y)
-                
-                val_loss += loss.item()
-                predicted = (outputs > 0.5).float()
-                total_val += batch_y.size(0)
-                correct_val += (predicted == batch_y).sum().item()
-                
-                # Collect predictions for F1 score calculation
-                y_true.extend(batch_y.cpu().numpy())
-                y_pred.extend(predicted.cpu().numpy())
-        
-        val_loss /= len(val_loader)
-        val_accuracy = correct_val / total_val
-        
-        # Calculate F1 score
-        y_true = np.array(y_true).flatten()
-        y_pred = np.array(y_pred).flatten()
-        
-        # Record history
-        history['loss'].append(train_loss)
-        history['accuracy'].append(train_accuracy)
-        history['val_loss'].append(val_loss)
-        history['val_accuracy'].append(val_accuracy)
-        history['lr'].append(optimizer.param_groups[0]['lr'])
-        
-        # Update learning rate
-        scheduler.step(val_loss)
-        
-        # Print progress
-        print(f'Epoch {epoch+1}/{epochs} - '
-              f'loss: {train_loss:.4f} - accuracy: {train_accuracy:.4f} - '
-              f'val_loss: {val_loss:.4f} - val_accuracy: {val_accuracy:.4f} - '
-              f'lr: {optimizer.param_groups[0]["lr"]:.6f}')
-        
-        # Early stopping
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            patience_counter = 0
-            best_model_state = model.model.state_dict().copy()
-        else:
-            patience_counter += 1
-            if early_stopping and patience_counter >= patience:
-                print(f'Early stopping triggered after {epoch+1} epochs')
-                break
-    
-    # Restore best model
-    if best_model_state is not None:
-        model.model.load_state_dict(best_model_state)
-    
-    return history
+        return metrics

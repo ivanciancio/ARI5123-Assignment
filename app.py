@@ -22,13 +22,17 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import os
 import datetime
-import time
 import torch
-from sklearn.metrics import classification_report
 from torchinfo import summary as torch_summary
 import logging
+import torch.nn as nn
+import torch.nn.functional as F
+from sklearn.metrics import confusion_matrix, roc_curve, auc
+import seaborn as sns
 
-# Configure logging - keep this for backend debugging but it won't show in the UI
+
+
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -138,7 +142,7 @@ def main():
     # Create sidebar for navigation
     st.sidebar.title("Main Menu")
     
-    # Simply show the navigation options without debug info
+    # Show the navigation options
     page = st.sidebar.radio("Go to", ["Introduction", "Data Preparation", "Model Training", "Trading Strategy", "Performance Analysis", "About"])
     
     # Display selected page
@@ -386,7 +390,6 @@ def display_data_preparation():
                             'window_size': window_size
                         }
                         
-                        # Show success message without debug info
                         st.success(f"""
                         Data preparation complete! 
                         - Training set: {X_train.shape[0]} samples
@@ -404,7 +407,7 @@ def display_data_preparation():
     
     # Show data visualisation if data is available
     if 'data' in st.session_state and st.session_state.data is not None and selected_ticker in st.session_state.data:
-        st.markdown("### Data Visualization")
+        st.markdown("### Data Visualisation")
         
         # Get data for the selected ticker
         ticker_data = st.session_state.data[selected_ticker]
@@ -472,13 +475,25 @@ def display_model_training():
     y_test = prepared_data['y_test']
     ticker = prepared_data['ticker']
     
+    # Ensure data is in the right shape for CNN [batch, channels, height, width]
+    if len(X_train.shape) == 3 and X_train.shape[1:] == (30, 30):
+        # Input is [batch, height, width], need to add channel dimension
+        X_train = X_train.reshape(X_train.shape[0], 1, 30, 30)
+        X_val = X_val.reshape(X_val.shape[0], 1, 30, 30)
+        X_test = X_test.reshape(X_test.shape[0], 1, 30, 30)
+        # Update the session state
+        prepared_data['X_train'] = X_train
+        prepared_data['X_val'] = X_val
+        prepared_data['X_test'] = X_test
+        st.session_state.prepared_data = prepared_data
+    
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.markdown("### Model Configuration")
     
     # Show data summary
     st.info(f"""
     **Data Summary for {ticker}**
-    - Training samples: {X_train.shape[0]} (with {X_train.shape[2]} features)
+    - Training samples: {X_train.shape[0]} (with {X_train.shape[2] if len(X_train.shape) > 2 else 30} features)
     - Validation samples: {X_val.shape[0]}
     - Test samples: {X_test.shape[0]} 
     """)
@@ -492,7 +507,7 @@ def display_model_training():
         model_type = st.radio(
             "Model Architecture",
             options=["Simple CNN", "Advanced CNN with Attention"],
-            index=1
+            index=0  # Use Simple CNN as default to match paper
         )
         
         epochs = st.slider("Training Epochs", min_value=10, max_value=100, value=50, step=5)
@@ -502,7 +517,7 @@ def display_model_training():
         use_focal_loss = st.checkbox("Use Focal Loss (for imbalanced data)", value=True)
         use_class_weights = st.checkbox("Use Class Weights", value=True)
         weight_decay = st.select_slider(
-            "Weight Decay (Regularization)",
+            "Weight Decay (Regularisation)",
             options=[0, 1e-6, 1e-5, 1e-4, 1e-3],
             value=1e-5,
             format_func=lambda x: f"{x:.0e}" if x > 0 else "0"
@@ -525,14 +540,19 @@ def display_model_training():
             format_func=lambda x: f"{x:.4f}"
         )
     
-    # Initialize model
-    input_shape = X_train.shape[1:]
+    # Check input shape and update
+    input_shape = X_train.shape[1:] if len(X_train.shape) > 1 else (30, 30)
     
     # Train model button
     if st.button("Train Model"):
         try:
             # Initialize model
-            model = CNNTradingModel(input_shape)
+            if len(input_shape) == 3 and input_shape[0] == 1:
+                # Input already has channel dimension [channels, height, width]
+                model = CNNTradingModel(input_shape=input_shape[1:])
+            else:
+                # Input is [height, width] or needs to be adjusted
+                model = CNNTradingModel(input_shape=(30, 30))
             
             # Build model
             if model_type == "Simple CNN":
@@ -554,12 +574,47 @@ def display_model_training():
             
             # Display model summary
             st.markdown("#### Model Summary")
-            model_summary = []
-            # Create a sample input tensor with the right shape
-            sample_input = torch.zeros((1,) + model.input_shape)
-            summary_str = str(torch_summary(model.model, input_size=sample_input.shape))
-            model_summary.append(summary_str)
-            st.code("\n".join(model_summary))
+            try:
+                # Create a sample input tensor with the right shape for 2D CNN
+                if model_type == "Simple CNN":
+                    # For SimpleCNN which expects [batch, channels, height, width]
+                    sample_input = torch.zeros((1, 1, 30, 30))
+                else:
+                    # For AdvancedCNN
+                    sample_input = torch.zeros((1, 1, 30, 30))
+                    
+                summary_str = str(torch_summary(model.model, input_size=sample_input.shape))
+                st.code(summary_str)
+            except Exception as e:
+                st.warning(f"Could not display detailed model summary due to: {str(e)}")
+                
+                # Provide a manual summary instead
+                if model_type == "Simple CNN":
+                    st.code("""
+                    SimpleCNN(
+                      (conv1): Conv2d(1, 32, kernel_size=3, stride=1)
+                      (pool1): MaxPool2d(kernel_size=2, stride=2)
+                      (dropout1): Dropout(p=0.2)
+                      (conv2): Conv2d(32, 64, kernel_size=3, stride=1)
+                      (pool2): MaxPool2d(kernel_size=2, stride=2)
+                      (dropout2): Dropout(p=0.2)
+                      (fc1): Linear(in_features=64*6*6, out_features=128)
+                      (dropout3): Dropout(p=0.3)
+                      (fc2): Linear(in_features=128, out_features=3)
+                    )
+                    """)
+                else:
+                    st.code("""
+                    AdvancedCNN(
+                      (conv1): Conv2d(1, 32, kernel_size=3, padding=1)
+                      (bn1): BatchNorm2d(32)
+                      (pool1): MaxPool2d(kernel_size=2)
+                      (res_conv1a): Conv2d(32, 64, kernel_size=3, padding=1)
+                      (res_bn1a): BatchNorm2d(64)
+                      ...
+                      (fc3): Linear(in_features=64, out_features=3)
+                    )
+                    """)
             
             # Custom callback for updating progress
             class ProgressCallback:
@@ -589,55 +644,115 @@ def display_model_training():
             original_train = model.train
             
             def train_with_progress(*args, **kwargs):
+                """
+                Train the CNN model with progress updates.
+                """
                 # Initialize progress
                 progress_text.markdown("**Training Progress: 0/{} epochs completed (0.0%)**".format(epochs))
                 progress_bar.progress(0)
                 
+                # First, let's rebuild our model with the correct architecture
+                if model_type == "Simple CNN":
+                    # Create a fixed version of SimpleCNN that properly handles channel dimensions
+                    class FixedSimpleCNN(nn.Module):
+                        def __init__(self):
+                            super(FixedSimpleCNN, self).__init__()
+                            # Input is 1 channel image
+                            self.conv1 = nn.Conv2d(1, 32, kernel_size=3)
+                            self.pool1 = nn.MaxPool2d(kernel_size=2)
+                            self.dropout1 = nn.Dropout(0.2)
+                            
+                            # Second conv layer takes 32 input channels (output from first conv)
+                            self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
+                            self.pool2 = nn.MaxPool2d(kernel_size=2)
+                            self.dropout2 = nn.Dropout(0.2)
+                            
+                            # We'll define the fc1 layer in the forward pass
+                            self.fc1 = None
+                            self.dropout3 = nn.Dropout(0.3)
+                            self.fc2 = nn.Linear(128, 3)  # 3 classes: Buy, Hold, Sell
+                            
+                        def forward(self, x):
+                            # Ensure input is in the right shape [batch, channels, height, width]
+                            if len(x.shape) == 3:  # [batch, height, width]
+                                x = x.unsqueeze(1)  # Add channel dimension
+                            elif len(x.shape) == 2:  # [height, width]
+                                x = x.unsqueeze(0).unsqueeze(0)  # Add batch and channel dimensions
+                            
+                            # First convolutional block
+                            x = F.relu(self.conv1(x))
+                            x = self.pool1(x)
+                            x = self.dropout1(x)
+                            
+                            # Second convolutional block
+                            x = F.relu(self.conv2(x))
+                            x = self.pool2(x)
+                            x = self.dropout2(x)
+                            
+                            # Flatten
+                            x_flat = x.view(x.size(0), -1)
+                            
+                            # Create fc1 layer if it doesn't exist yet
+                            if self.fc1 is None:
+                                self.fc1 = nn.Linear(x_flat.shape[1], 128).to(x.device)
+                            
+                            # Fully connected layers
+                            x = F.relu(self.fc1(x_flat))
+                            x = self.dropout3(x)
+                            x = self.fc2(x)
+                            
+                            return F.softmax(x, dim=1)  # Output probabilities for 3 classes
+                            
+                    # Replace the model with our fixed version
+                    model.model = FixedSimpleCNN().to(model.device)
+                else:
+                    # The advanced CNN model should already handle channels correctly
+                    pass
+                
                 # Training and validation datasets
-                X_train_tensor = torch.tensor(X_train, dtype=torch.float32).to(model.device)
-                y_train_tensor = torch.tensor(y_train, dtype=torch.float32).unsqueeze(1).to(model.device)
-                X_val_tensor = torch.tensor(X_val, dtype=torch.float32).to(model.device)
-                y_val_tensor = torch.tensor(y_val, dtype=torch.float32).unsqueeze(1).to(model.device)
+                X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
                 
-                # Calculate class weights if needed
-                class_weights = None
-                if use_class_weights:
-                    class_counts = np.bincount(y_train.astype(int))
-                    total_samples = len(y_train)
-                    class_weights = {
-                        0: total_samples / (2 * class_counts[0]) if class_counts[0] > 0 else 1.0,
-                        1: total_samples / (2 * class_counts[1]) if class_counts[1] > 0 else 1.0
-                    }
+                # Check if labels are one-hot encoded or just indices
+                if len(y_train.shape) == 1 or y_train.shape[1] == 1:
+                    # Convert to integers and then to tensor
+                    y_train_tensor = torch.tensor(y_train.astype(int), dtype=torch.long)
+                    if y_train_tensor.dim() > 1:  # If shape is [N, 1]
+                        y_train_tensor = y_train_tensor.squeeze(1)
+                else:
+                    # One-hot encoded, keep as is
+                    y_train_tensor = torch.tensor(y_train, dtype=torch.float32)
                 
+                # Do the same for validation data
+                X_val_tensor = torch.tensor(X_val, dtype=torch.float32)
+                if len(y_val.shape) == 1 or y_val.shape[1] == 1:
+                    y_val_tensor = torch.tensor(y_val.astype(int), dtype=torch.long)
+                    if y_val_tensor.dim() > 1:  # If shape is [N, 1]
+                        y_val_tensor = y_val_tensor.squeeze(1)
+                else:
+                    y_val_tensor = torch.tensor(y_val, dtype=torch.float32)
+                
+                # Move tensors to device
+                X_train_tensor = X_train_tensor.to(model.device)
+                y_train_tensor = y_train_tensor.to(model.device)
+                X_val_tensor = X_val_tensor.to(model.device)
+                y_val_tensor = y_val_tensor.to(model.device)
+                
+                # Ensure tensors have the right shape for CNN [batch, channel, height, width]
+                if len(X_train_tensor.shape) == 3:  # [batch, height, width]
+                    X_train_tensor = X_train_tensor.unsqueeze(1)  # Add channel dimension
+                if len(X_val_tensor.shape) == 3:  # [batch, height, width]
+                    X_val_tensor = X_val_tensor.unsqueeze(1)  # Add channel dimension
+                    
                 # Create datasets and dataloaders
                 train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
                 val_dataset = torch.utils.data.TensorDataset(X_val_tensor, y_val_tensor)
                 
-                # Use weighted sampler if class weights are provided
-                if class_weights is not None:
-                    # Calculate sample weights based on class weights
-                    sample_weights = torch.zeros(len(y_train))
-                    for idx, y in enumerate(y_train):
-                        sample_weights[idx] = class_weights[int(y)]
-                    
-                    # Create weighted sampler
-                    sampler = torch.utils.data.WeightedRandomSampler(
-                        weights=sample_weights,
-                        num_samples=len(sample_weights),
-                        replacement=True
-                    )
-                    train_loader = torch.utils.data.DataLoader(
-                        train_dataset, 
-                        batch_size=batch_size, 
-                        sampler=sampler
-                    )
-                else:
-                    train_loader = torch.utils.data.DataLoader(
-                        train_dataset, 
-                        batch_size=batch_size, 
-                        shuffle=True
-                    )
-                
+                # Regular dataloaders
+                train_loader = torch.utils.data.DataLoader(
+                    train_dataset, 
+                    batch_size=batch_size, 
+                    shuffle=True
+                )
                 val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size)
                 
                 # Define optimizer with weight decay for regularization
@@ -652,21 +767,27 @@ def display_model_training():
                     verbose=True
                 )
                 
-                # Define loss function
+                # Define loss function for multi-class classification
                 if use_focal_loss:
-                    # Focal loss for imbalanced data
+                    # Focal loss for multi-class classification
                     class FocalLoss(torch.nn.Module):
                         def __init__(self, alpha=0.25, gamma=2.0, reduction='mean'):
                             super(FocalLoss, self).__init__()
                             self.alpha = alpha
                             self.gamma = gamma
                             self.reduction = reduction
-                            self.bce = torch.nn.BCELoss(reduction='none')
+                            # Use CrossEntropyLoss for multi-class classification
+                            self.ce = torch.nn.CrossEntropyLoss(reduction='none')
                             
                         def forward(self, inputs, targets):
-                            BCE_loss = self.bce(inputs, targets)
-                            pt = torch.exp(-BCE_loss)
-                            F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
+                            # If targets are one-hot, convert to indices
+                            if targets.dim() > 1 and targets.shape[1] > 1:
+                                targets = torch.argmax(targets, dim=1)
+                            
+                            # Calculate loss
+                            CE_loss = self.ce(inputs, targets)
+                            pt = torch.exp(-CE_loss)
+                            F_loss = self.alpha * (1-pt)**self.gamma * CE_loss
                             
                             if self.reduction == 'mean':
                                 return torch.mean(F_loss)
@@ -677,7 +798,8 @@ def display_model_training():
                     
                     criterion = FocalLoss(alpha=0.25, gamma=2.0)
                 else:
-                    criterion = torch.nn.BCELoss()
+                    # Plain CrossEntropyLoss for multi-class classification
+                    criterion = torch.nn.CrossEntropyLoss()
                 
                 # Training loop
                 history = {
@@ -702,15 +824,36 @@ def display_model_training():
                     
                     for batch_X, batch_y in train_loader:
                         optimizer.zero_grad()
+                        
+                        # Forward pass
                         outputs = model.model(batch_X)
+                        
+                        # Handle targets based on output format
+                        if outputs.shape[1] == 3:  # Multi-class classification
+                            # Convert one-hot to indices if needed
+                            if batch_y.dim() > 1 and batch_y.shape[1] > 1:
+                                batch_y = torch.argmax(batch_y, dim=1)
+                        
+                        # Calculate loss and backpropagate
                         loss = criterion(outputs, batch_y)
                         loss.backward()
                         optimizer.step()
                         
                         train_loss += loss.item()
-                        predicted = (outputs > 0.5).float()
-                        total_train += batch_y.size(0)
-                        correct_train += (predicted == batch_y).sum().item()
+                        
+                        # Get predictions based on output format
+                        if outputs.shape[1] == 3:  # Multi-class
+                            predicted = torch.argmax(outputs, dim=1)
+                            if batch_y.dim() > 1 and batch_y.shape[1] > 1:
+                                targets = torch.argmax(batch_y, dim=1)
+                            else:
+                                targets = batch_y
+                        else:  # Binary
+                            predicted = (outputs > 0.5).float()
+                            targets = batch_y
+                            
+                        total_train += targets.size(0)
+                        correct_train += (predicted == targets).sum().item()
                     
                     train_loss /= len(train_loader)
                     train_accuracy = correct_train / total_train
@@ -723,13 +866,32 @@ def display_model_training():
                     
                     with torch.no_grad():
                         for batch_X, batch_y in val_loader:
+                            # Forward pass
                             outputs = model.model(batch_X)
+                            
+                            # Handle targets based on output format
+                            if outputs.shape[1] == 3:  # Multi-class classification
+                                # Convert one-hot to indices if needed
+                                if batch_y.dim() > 1 and batch_y.shape[1] > 1:
+                                    batch_y = torch.argmax(batch_y, dim=1)
+                            
                             loss = criterion(outputs, batch_y)
                             
                             val_loss += loss.item()
-                            predicted = (outputs > 0.5).float()
-                            total_val += batch_y.size(0)
-                            correct_val += (predicted == batch_y).sum().item()
+                            
+                            # Get predictions based on output format
+                            if outputs.shape[1] == 3:  # Multi-class
+                                predicted = torch.argmax(outputs, dim=1)
+                                if batch_y.dim() > 1 and batch_y.shape[1] > 1:
+                                    targets = torch.argmax(batch_y, dim=1)
+                                else:
+                                    targets = batch_y
+                            else:  # Binary
+                                predicted = (outputs > 0.5).float()
+                                targets = batch_y
+                                
+                            total_val += targets.size(0)
+                            correct_val += (predicted == targets).sum().item()
                     
                     val_loss /= len(val_loader)
                     val_accuracy = correct_val / total_val
@@ -808,14 +970,17 @@ def display_model_training():
             with col1:
                 st.metric("Accuracy", f"{metrics['accuracy']:.2%}")
             with col2:
-                st.metric("Precision", f"{metrics['precision']:.2%}")
+                st.metric("Buy Precision", f"{metrics['class_metrics']['Buy']['precision']:.2%}" if 'class_metrics' in metrics else "N/A")
             with col3:
-                st.metric("Recall", f"{metrics['recall']:.2%}")
+                st.metric("Sell Precision", f"{metrics['class_metrics']['Sell']['precision']:.2%}" if 'class_metrics' in metrics else "N/A")
             with col4:
-                st.metric("F1 Score", f"{metrics['f1_score']:.2%}")
+                st.metric("Hold Precision", f"{metrics['class_metrics']['Hold']['precision']:.2%}" if 'class_metrics' in metrics else "N/A")
             
             # Display evaluation plots
-            fig = plot_model_evaluation(y_test, y_pred_prob)
+            if y_pred_prob.shape[1] > 1:  # If we have multiple classes
+                fig = plot_multiclass_evaluation(y_test, y_pred_prob)
+            else:  # Binary classification
+                fig = plot_model_evaluation(y_test, y_pred_prob)
             st.pyplot(fig)
             
             # Save model
@@ -928,11 +1093,26 @@ def display_trading_strategy():
             if hasattr(df, 'ATR_14'):
                 market_data = df.loc[test_dates]
             
+            # For multi-class predictions, we need to convert them to a signal format
+            # Buy = 1, Hold = 0, Sell = 2
+            if len(predictions.shape) > 1 and predictions.shape[1] > 1:
+                # Get the most probable class for each prediction
+                signals = np.argmax(predictions, axis=1)
+            else:
+                # For binary predictions, flatten
+                signals = predictions.flatten()
+            
+            # Ensure signals and test_prices have the same length
+            min_length = min(len(signals), len(test_prices))
+            signals = signals[:min_length]
+            test_prices = test_prices[:min_length]
+            aligned_dates = test_dates[:min_length]
+            
             # Apply trading strategy with threshold option
             strategy_results = strategy.apply_strategy(
                 test_prices, 
-                predictions.flatten(), 
-                test_dates,
+                signals, 
+                aligned_dates,
                 fixed_threshold=None if threshold_method == "Dynamic" else signal_threshold
             )
             
@@ -1032,32 +1212,11 @@ def display_performance_analysis():
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.markdown("### Performance Report")
     
-    
-def display_performance_analysis():
-    """Display performance analysis page with detailed performance metrics."""
-    st.markdown('<div class="sub-header">Performance Analysis</div>', unsafe_allow_html=True)
-    
-    # Check if strategy results are available
-    if 'strategy_results' not in st.session_state or st.session_state.strategy_results is None:
-        st.warning("Please execute a trading strategy first in the 'Trading Strategy' section.")
-        return
-    
-    # Get results
-    strategy_results = st.session_state.strategy_results
-    benchmark_results = st.session_state.benchmark_results
-    random_results = st.session_state.random_results
-    
-    # Get ticker information from session state
-    ticker = st.session_state.prepared_data['ticker'] if 'prepared_data' in st.session_state else "selected stock"
-    
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.markdown("### Performance Report")
-    
     # Create metrics display directly
     metrics = [
         ('Total Return', f"{strategy_results['total_return']:.2%}", 
          f"{benchmark_results['total_return']:.2%}" if benchmark_results else None),
-        ('Annualized Return', f"{strategy_results['annualized_return']:.2%}", 
+        ('Annualised Return', f"{strategy_results['annualized_return']:.2%}", 
          f"{benchmark_results['annualized_return']:.2%}" if benchmark_results else None),
         ('Sharpe Ratio', f"{strategy_results['sharpe_ratio']:.2f}", 
          f"{benchmark_results['sharpe_ratio']:.2f}" if benchmark_results else None),
@@ -1282,6 +1441,109 @@ def display_about():
     10. Kingma, D. P., & Ba, J. (2014). Adam: A method for stochastic optimization. arXiv preprint arXiv:1412.6980.
     """)
     st.markdown('</div>', unsafe_allow_html=True)
+
+def plot_multiclass_evaluation(y_true, y_pred_prob, figsize=(16, 12)):
+    """
+    Plot model evaluation metrics for multi-class classification.
+    
+    Args:
+        y_true: True labels (integer class labels)
+        y_pred_prob: Predicted probabilities (array of shape [n_samples, n_classes])
+        figsize: Figure size
+        
+    Returns:
+        Matplotlib figure
+    """
+    # Convert one-hot encoded y_true to integer class labels if needed
+    if len(y_true.shape) > 1 and y_true.shape[1] > 1:
+        y_true = np.argmax(y_true, axis=1)
+    
+    # Get predicted class
+    y_pred = np.argmax(y_pred_prob, axis=1)
+    
+    # Create figure
+    fig, axes = plt.subplots(2, 2, figsize=figsize)
+    
+    # Plot confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+    
+    # Map the class indices to class names for clarity
+    class_names = ['Hold', 'Buy', 'Sell']
+    num_classes = cm.shape[0]  # Get actual number of classes from confusion matrix
+    
+    # Only use as many class names as we have classes in the confusion matrix
+    used_class_names = class_names[:num_classes]
+    
+    # Let seaborn handle the tick labels
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False, ax=axes[0, 0], 
+                xticklabels=used_class_names, yticklabels=used_class_names)
+    
+    axes[0, 0].set_xlabel('Predicted Label')
+    axes[0, 0].set_ylabel('True Label')
+    axes[0, 0].set_title('Confusion Matrix')
+    
+    # Plot ROC curves for each class (one-vs-rest)
+    axes[0, 1].plot([0, 1], [0, 1], 'k--')
+    
+    # Calculate ROC curve and AUC for each class
+    for i, class_name in enumerate(used_class_names):
+        if i < y_pred_prob.shape[1]:  # Make sure we have predictions for this class
+            # For each class, treat it as a binary classification problem
+            y_true_binary = (y_true == i).astype(int)
+            y_score = y_pred_prob[:, i]
+            
+            try:
+                fpr, tpr, _ = roc_curve(y_true_binary, y_score)
+                roc_auc = auc(fpr, tpr)
+                axes[0, 1].plot(fpr, tpr, label=f'{class_name} (AUC = {roc_auc:.3f})')
+            except Exception as e:
+                # Skip this class if there's an error
+                continue
+    
+    axes[0, 1].set_xlim([0.0, 1.0])
+    axes[0, 1].set_ylim([0.0, 1.05])
+    axes[0, 1].set_xlabel('False Positive Rate')
+    axes[0, 1].set_ylabel('True Positive Rate')
+    axes[0, 1].set_title('ROC Curves (One-vs-Rest)')
+    axes[0, 1].legend(loc="lower right")
+    axes[0, 1].grid(True)
+    
+    # Plot class distribution
+    class_counts = np.bincount(y_true, minlength=len(used_class_names))
+    bars = axes[1, 0].bar(range(len(used_class_names)), class_counts[:len(used_class_names)])
+    
+    # Add count labels on top of bars
+    for bar in bars:
+        height = bar.get_height()
+        axes[1, 0].text(bar.get_x() + bar.get_width()/2., height,
+                f'{height}', ha='center', va='bottom')
+    
+    axes[1, 0].set_xlabel('Class')
+    axes[1, 0].set_ylabel('Count')
+    axes[1, 0].set_title('Class Distribution')
+    axes[1, 0].set_xticks(range(len(used_class_names)))
+    axes[1, 0].set_xticklabels(used_class_names)
+    axes[1, 0].grid(True, axis='y')
+    
+    # Plot prediction distribution
+    pred_class_counts = np.bincount(y_pred, minlength=len(used_class_names))
+    bars = axes[1, 1].bar(range(len(used_class_names)), pred_class_counts[:len(used_class_names)])
+    
+    # Add count labels on top of bars
+    for bar in bars:
+        height = bar.get_height()
+        axes[1, 1].text(bar.get_x() + bar.get_width()/2., height,
+                f'{height}', ha='center', va='bottom')
+    
+    axes[1, 1].set_xlabel('Predicted Class')
+    axes[1, 1].set_ylabel('Count')
+    axes[1, 1].set_title('Prediction Distribution')
+    axes[1, 1].set_xticks(range(len(used_class_names)))
+    axes[1, 1].set_xticklabels(used_class_names)
+    axes[1, 1].grid(True, axis='y')
+    
+    plt.tight_layout()
+    return fig
 
 # Run the app
 if __name__ == "__main__":

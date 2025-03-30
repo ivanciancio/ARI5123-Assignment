@@ -5,10 +5,7 @@ matplotlib
 seaborn
 scikit-learn
 torch
-torchvision
 yfinance
 ta
 plotly
-joblib
-tqdm
 torchinfo

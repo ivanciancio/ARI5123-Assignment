@@ -2,7 +2,7 @@
 Trading Strategy Module
 
 This module implements the trading strategy based on model predictions.
-It includes position sizing, risk management, and performance evaluation.
+It follows the approach from Sezer & Ozbayoglu (2018) for buy/sell signals.
 """
 
 import pandas as pd
@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 
 class TradingStrategy:
     """
-    Enhanced trading strategy with dynamic thresholds, position sizing, and risk management.
+    Trading strategy implementation based on CNN model predictions.
+    Follows the approach from Sezer & Ozbayoglu (2018) paper.
     """
     
     def __init__(self, initial_capital=10000.0, transaction_cost=0.001):
@@ -43,10 +44,11 @@ class TradingStrategy:
     def apply_strategy(self, prices, signals, dates=None, fixed_threshold=None):
         """
         Apply the trading strategy based on model signals.
+        Implementation follows Sezer & Ozbayoglu (2018) paper.
         
         Args:
             prices: Array of prices
-            signals: Array of trading signals (probabilities from 0 to 1)
+            signals: Array of trading signals (0=Hold, 1=Buy, 2=Sell)
             dates: Array of dates for the trading period (optional)
             fixed_threshold: Fixed threshold value (if None, use dynamic thresholds)
             
@@ -65,43 +67,6 @@ class TradingStrategy:
         # Initial portfolio value
         self.portfolio_values.append(self.capital)
         
-        # Analyze signal distribution
-        signal_min = np.min(signals)
-        signal_max = np.max(signals)
-        signal_mean = np.mean(signals)
-        signal_std = np.std(signals)
-        signal_range = signal_max - signal_min
-        
-        print(f"Signal statistics: Min={signal_min:.4f}, Max={signal_max:.4f}, Mean={signal_mean:.4f}, Std={signal_std:.4f}")
-        
-        # Calculate thresholds based on signal characteristics
-        if fixed_threshold is None:
-            # For narrow signal ranges, use percentiles instead of fixed values
-            if signal_range < 0.2:
-                # Sort signals to find percentiles
-                sorted_signals = np.sort(signals)
-                buy_percentile = 70  # Use top 30% for buy signals
-                sell_percentile = 30  # Use bottom 30% for sell signals
-                
-                # Get threshold values based on percentiles
-                threshold_high = np.percentile(signals, buy_percentile)
-                threshold_low = np.percentile(signals, sell_percentile)
-            else:
-                # For wider ranges, use the mean +/- percentage of the range
-                threshold_high = signal_mean + (signal_range * 0.25)
-                threshold_low = signal_mean - (signal_range * 0.25)
-                
-                # Apply constraints to ensure reasonable thresholds
-                threshold_high = min(0.65, max(0.52, threshold_high))
-                threshold_low = max(0.35, min(0.48, threshold_low))
-            
-            print(f"Using dynamic thresholds - Buy: {threshold_high:.4f}, Sell: {threshold_low:.4f}")
-        else:
-            # Use fixed threshold value
-            threshold_high = fixed_threshold
-            threshold_low = fixed_threshold
-            print(f"Using fixed threshold: {fixed_threshold:.4f}")
-        
         # Track trading activity
         buy_signals = 0
         sell_signals = 0
@@ -113,10 +78,14 @@ class TradingStrategy:
                 current_value += self.position * prices[i-1]
             
             # Generate trading decision from signal
-            signal = signals[i-1]
+            # If signals are probabilities, convert to class (0=Hold, 1=Buy, 2=Sell)
+            if isinstance(signals[i-1], (np.ndarray, list)) and len(np.shape(signals)) > 1:
+                signal_class = np.argmax(signals[i-1])
+            else:
+                signal_class = int(signals[i-1])
             
             # Execute trades based on decision
-            if signal > threshold_high and self.position == 0:
+            if signal_class == 1 and self.position == 0:
                 # BUY
                 # Calculate position size (invest 95% of capital)
                 amount_to_invest = self.capital * 0.95
@@ -140,9 +109,9 @@ class TradingStrategy:
                 })
                 
                 buy_signals += 1
-                print(f"BUY: {dates[i]}, Price: {prices[i]:.2f}, Shares: {shares:.2f}, Capital: {self.capital:.2f}")
+                logger.info(f"BUY: {dates[i]}, Price: {prices[i]:.2f}, Shares: {shares:.2f}, Capital: {self.capital:.2f}")
                 
-            elif signal <= threshold_low and self.position > 0:
+            elif signal_class == 2 and self.position > 0:
                 # SELL
                 # Calculate trade value and cost
                 value = self.position * prices[i]
@@ -167,7 +136,7 @@ class TradingStrategy:
                     'pnl': pnl
                 })
                 
-                print(f"SELL: {dates[i]}, Price: {prices[i]:.2f}, Shares: {self.position:.2f}, PnL: {pnl:.2f}, Capital: {self.capital:.2f}")
+                logger.info(f"SELL: {dates[i]}, Price: {prices[i]:.2f}, Shares: {self.position:.2f}, PnL: {pnl:.2f}, Capital: {self.capital:.2f}")
                 
                 # Reset position
                 self.position = 0
@@ -181,8 +150,9 @@ class TradingStrategy:
             self.portfolio_values.append(portfolio_value)
             
             # Calculate daily return
-            daily_return = (portfolio_value - self.portfolio_values[i-1]) / self.portfolio_values[i-1]
-            self.returns.append(daily_return)
+            if i > 0:
+                daily_return = (portfolio_value - self.portfolio_values[i-1]) / self.portfolio_values[i-1]
+                self.returns.append(daily_return)
         
         # Close any remaining position at the end of the period
         if self.position > 0:
@@ -216,15 +186,15 @@ class TradingStrategy:
             self.position = 0
             sell_signals += 1
             
-            print(f"FINAL SELL: {dates[-1]}, Price: {final_price:.2f}, Shares: {self.position:.2f}, PnL: {pnl:.2f}, Capital: {self.capital:.2f}")
+            logger.info(f"FINAL SELL: {dates[-1]}, Price: {final_price:.2f}, Shares: {self.position:.2f}, PnL: {pnl:.2f}, Capital: {self.capital:.2f}")
         
         # Print statistics for debugging
-        print(f"Strategy statistics: Buy signals: {buy_signals}, Sell signals: {sell_signals}")
-        print(f"Final portfolio value: {self.portfolio_values[-1]:.2f}")
+        logger.info(f"Strategy statistics: Buy signals: {buy_signals}, Sell signals: {sell_signals}")
+        logger.info(f"Final portfolio value: {self.portfolio_values[-1]:.2f}")
         
         # Return performance metrics
         metrics = self._calculate_performance_metrics()
-        print(f"Performance metrics: {metrics}")
+        logger.info(f"Performance metrics: {metrics}")
         return metrics
     
     def apply_buy_and_hold(self, prices, dates=None):
@@ -312,7 +282,7 @@ class TradingStrategy:
         
         # Return performance metrics
         metrics = self._calculate_performance_metrics()
-        print(f"Buy & Hold metrics: {metrics}")
+        logger.info(f"Buy & Hold metrics: {metrics}")
         return metrics
     
     def apply_random_strategy(self, prices, dates=None, seed=42):
@@ -448,7 +418,7 @@ class TradingStrategy:
         
         # Return performance metrics
         metrics = self._calculate_performance_metrics()
-        print(f"Random strategy metrics: {metrics}")
+        logger.info(f"Random strategy metrics: {metrics}")
         return metrics
     
     def _calculate_performance_metrics(self):
