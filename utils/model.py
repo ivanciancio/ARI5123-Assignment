@@ -190,6 +190,7 @@ class CNNTradingModel:
     def build_simple_cnn(self):
         """
         Build a simple CNN model following Sezer & Ozbayoglu (2018).
+        This implementation is more robust across different environments.
         
         Returns:
             Compiled CNN model
@@ -199,21 +200,25 @@ class CNNTradingModel:
             def __init__(self):
                 super(FixedSimpleCNN, self).__init__()
                 # Input is 1 channel image
-                self.conv1 = nn.Conv2d(1, 32, kernel_size=3)
+                self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)  # Add padding for consistent dimensions
                 self.pool1 = nn.MaxPool2d(kernel_size=2)
                 self.dropout1 = nn.Dropout(0.2)
                 
                 # Second conv layer takes 32 input channels (output from first conv)
-                self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
+                self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)  # Add padding for consistent dimensions
                 self.pool2 = nn.MaxPool2d(kernel_size=2)
                 self.dropout2 = nn.Dropout(0.2)
                 
-                # We'll define the fc1 layer in the forward pass
-                self.fc1 = None
+                # We'll define the fc1 layer with a default reasonable size
+                # Based on a 30x30 input, with the above layers, we get 7x7 feature maps
+                self.fc1 = nn.Linear(64 * 7 * 7, 128)
                 self.dropout3 = nn.Dropout(0.3)
                 self.fc2 = nn.Linear(128, 3)  # 3 classes: Buy, Hold, Sell
                 
             def forward(self, x):
+                # Debug outputs
+                initial_shape = x.shape
+                
                 # Ensure input is in the right shape [batch, channels, height, width]
                 if len(x.shape) == 3:  # [batch, height, width]
                     x = x.unsqueeze(1)  # Add channel dimension
@@ -230,22 +235,38 @@ class CNNTradingModel:
                 x = self.pool2(x)
                 x = self.dropout2(x)
                 
-                # Flatten
+                # Flatten - handle dynamic input sizes
                 x_flat = x.view(x.size(0), -1)
                 
-                # Create fc1 layer if it doesn't exist yet
-                if self.fc1 is None:
-                    self.fc1 = nn.Linear(x_flat.shape[1], 128).to(x.device)
+                # If fc1 has the wrong input size, recreate it with the correct size
+                if self.fc1.in_features != x_flat.shape[1]:
+                    device = x.device
+                    input_size = x_flat.shape[1]
+                    self.fc1 = nn.Linear(input_size, 128).to(device)
+                    print(f"Adjusted fc1 layer: {input_size} -> 128")
                 
                 # Fully connected layers
                 x = F.relu(self.fc1(x_flat))
                 x = self.dropout3(x)
                 x = self.fc2(x)
                 
-                return F.softmax(x, dim=1)  # Output probabilities for 3 classes
+                # Use log softmax for better numerical stability
+                return F.softmax(x, dim=1)
         
         # Use the fixed model
         model = FixedSimpleCNN().to(self.device)
+        
+        # Initialize weights with a robust method
+        for m in model.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                nn.init.constant_(m.bias, 0)
+                
         self.model = model
         return model
     

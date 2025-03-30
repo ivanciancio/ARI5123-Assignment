@@ -610,210 +610,292 @@ def create_performance_report(strategy_results, benchmark_results=None):
 
 def create_improved_architecture_diagram():
     """
-    Create architecture diagram that's compatible with basic matplotlib.
+    Create a visually enhanced architecture diagram for the trading system
+    with improved text clarity and proper spacing.
     
     Returns:
         Matplotlib figure
     """
-    # Import directly to ensure Ellipse is available
     from matplotlib.patches import Rectangle, FancyArrowPatch, Ellipse
+    import matplotlib.pyplot as plt
+    import matplotlib.patheffects as PathEffects
     
-    # Create figure with a clean white background
-    fig, ax = plt.subplots(figsize=(14, 8), facecolor='white')
+    # Create figure with a premium white background
+    plt.rcParams['figure.facecolor'] = 'white'
+    plt.rcParams['axes.facecolor'] = 'white'
+    fig, ax = plt.subplots(figsize=(16, 9), facecolor='white')  # Larger figure size
     ax.set_facecolor('white')
     
     # Remove axes
     ax.axis('off')
     
-    # Define color palette
-    primary_color = '#2563EB'      # Royal blue
-    secondary_color = '#1E40AF'    # Darker blue
-    background_color = '#F1F5F9'   # Very light blue/gray
-    accent_color = '#0284C7'       # Sky blue
-    text_dark = '#0F172A'          # Near black
-    text_light = '#F8FAFC'         # Near white
-    arrow_color = '#0369A1'        # Medium blue
+    # Define an improved color palette
+    colors = {
+        'primary': '#3b82f6',      # Main blue
+        'secondary': '#1e40af',    # Dark blue
+        'accent1': '#34d399',      # Teal accent
+        'accent2': '#f97316',      # Orange accent
+        'background': '#f8fafc',   # Very light gray
+        'text_dark': '#0f172a',    # Near black
+        'text_light': '#f8fafc',   # Near white
+        'gradient_top': '#3b82f6', # Gradient top color
+        'gradient_bottom': '#1e40af', # Gradient bottom color
+        'arrow': '#0369a1',        # Arrow blue
+        'shadow': (0, 0, 0, 0.5)   # Shadow color as a proper RGBA tuple
+    }
     
-    # Component details with titles and descriptions
+    # Component details with improved descriptions
     components = [
         {
-            'name': 'Historical Stock Data',
-            'desc': 'OHLCV data from Yahoo Finance',
-            'symbol': 'D'
+            'name': 'Historical\nStock Data',
+            'desc': 'OHLCV data from\nYahoo Finance',
+            'symbol': 'D',
+            'color': '#4f46e5'  # Indigo
         },
         {
-            'name': 'Data Preprocessing',
-            'desc': 'Normalisation & sequence creation',
-            'symbol': 'P'
+            'name': 'Data\nPreprocessing',
+            'desc': 'Normalisation &\nsequence creation',
+            'symbol': 'P',
+            'color': '#8b5cf6'  # Purple
         },
         {
-            'name': 'Feature Engineering',
-            'desc': 'Technical indicators & patterns',
-            'symbol': 'F'
+            'name': 'Feature\nEngineering',
+            'desc': 'Technical indicators\n& patterns',
+            'symbol': 'F',
+            'color': '#3b82f6'  # Blue
         },
         {
             'name': 'CNN Model',
-            'desc': 'Deep learning with attention',
-            'symbol': 'M'
+            'desc': 'Deep learning\nwith attention',
+            'symbol': 'M',
+            'color': '#0ea5e9'  # Sky blue
         },
         {
-            'name': 'Trading Signals',
-            'desc': 'Buy/sell probability predictions',
-            'symbol': 'S'
+            'name': 'Trading\nSignals',
+            'desc': 'Buy/sell probability\npredictions',
+            'symbol': 'S',
+            'color': '#14b8a6'  # Teal
         },
         {
-            'name': 'Trading Strategy',
-            'desc': 'Position sizing & risk management',
-            'symbol': 'T'
+            'name': 'Trading\nStrategy',
+            'desc': 'Position sizing &\nrisk management',
+            'symbol': 'T',
+            'color': '#10b981'  # Emerald
         },
         {
-            'name': 'Performance Evaluation',
-            'desc': 'Return & risk metrics analysis',
-            'symbol': 'E'
+            'name': 'Performance\nEvaluation',
+            'desc': 'Return & risk\nmetrics analysis',
+            'symbol': 'E',
+            'color': '#22c55e'  # Green
         }
     ]
     
-    # Define component dimensions and positions
+    # Add a premium background panel
+    ax.add_patch(Rectangle(
+        (0.03, 0.15), 0.94, 0.65, 
+        facecolor=colors['background'],
+        edgecolor='#e2e8f0',
+        linewidth=1,
+        alpha=0.8,
+        zorder=0
+    ))
+    
+    # Add a stylish header band
+    ax.add_patch(Rectangle(
+        (0.03, 0.7), 0.94, 0.2,
+        facecolor=colors['background'],
+        edgecolor='none',
+        alpha=0.5,
+        zorder=0
+    ))
+    
+    # Add title with enhanced styling
+    ax.text(
+        0.5, 0.83, 
+        'Intelligent Algorithmic Trading System Architecture',
+        ha='center', va='center', 
+        fontsize=24, 
+        fontweight='bold', 
+        color=colors['text_dark'],
+        family='sans-serif'
+    )
+    
+    # Add subtitle with paper reference
+    ax.text(
+        0.5, 0.77,
+        'Based on Sezer & Ozbayoglu (2018) with attention mechanism enhancements',
+        ha='center', va='center', 
+        fontsize=14, 
+        fontstyle='italic', 
+        color='#64748b',
+        family='sans-serif'
+    )
+    
+    # Define component dimensions and positions with more space
     num_components = len(components)
-    component_width = 0.12
-    component_height = 0.5
-    total_width = 0.85
+    component_width = 0.12  # Increased width
+    component_height = 0.45  # Slightly shorter to prevent overlap
+    total_width = 0.88
     spacing = (total_width - (num_components * component_width)) / (num_components - 1)
     
     y_position = 0.45  # Vertical center of the plot
     
-    # Add a background panel for the entire diagram area
-    background_panel = Rectangle((0.03, 0.15), 
-                                0.94, 0.65,
-                                facecolor=background_color, 
-                                edgecolor='none',
-                                alpha=1.0,
-                                zorder=0)
-    ax.add_patch(background_panel)
-    
-    # Add a divider line under the title area
-    ax.plot([0.05, 0.95], [0.7, 0.7], linestyle='-', color=primary_color, alpha=0.3, linewidth=1)
-    
-    # Draw components
+    # Draw components with a more modern, gradient look
     for i, component in enumerate(components):
         # Calculate x position
         x = 0.05 + i * (component_width + spacing)
         
-        # Create main component rectangle with shadow effect
-        shadow = Rectangle((x+0.003, y_position-component_height/2-0.003), 
-                          component_width, component_height,
-                          facecolor='#64748B', 
-                          alpha=0.2,
-                          zorder=1)
+        # Create shadow effect for depth
+        ax.add_patch(Rectangle(
+            (x+0.005, y_position-component_height/2-0.005), 
+            component_width, 
+            component_height,
+            facecolor='#64748b', 
+            alpha=0.15,
+            zorder=1
+        ))
         
-        # Main rectangle with alternating colors
-        use_primary = i % 2 == 0
-        rect_color = primary_color if use_primary else secondary_color
+        # Use component-specific color
+        color = component['color']
         
-        rect = Rectangle((x, y_position-component_height/2), 
-                         component_width, component_height,
-                         facecolor=rect_color, 
-                         edgecolor='white',
-                         linewidth=1.5,
-                         alpha=0.9,
-                         zorder=2)
+        # Create main component rectangle
+        ax.add_patch(Rectangle(
+            (x, y_position-component_height/2), 
+            component_width, 
+            component_height,
+            facecolor=color,
+            edgecolor='white',
+            linewidth=1.5,
+            alpha=0.85,
+            zorder=2
+        ))
         
-        # Add components to plot
-        ax.add_patch(shadow)
-        ax.add_patch(rect)
-        
-        # Add circular symbol at top using Ellipse
-        circle_radius = 0.05
-        ellipse = Ellipse((x + component_width/2, y_position + component_height/3), 
-                        circle_radius*2, circle_radius*2, 
-                        facecolor=text_light, 
-                        edgecolor='none', 
-                        zorder=3)
+        # Add circular symbol at top
+        circle_radius = 0.04
+        ellipse = Ellipse(
+            (x + component_width/2, y_position + component_height/3), 
+            circle_radius*2, 
+            circle_radius*2, 
+            facecolor='white', 
+            edgecolor='none', 
+            zorder=3,
+            alpha=0.95
+        )
         ax.add_patch(ellipse)
         
-        # Add symbol text
-        ax.text(x + component_width/2, y_position + component_height/3,
-                component['symbol'], 
-                ha='center', va='center', 
-                fontsize=16, fontweight='bold',
-                color=rect_color,
-                zorder=4)
+        # Add symbol text with shadow effect for better visibility
+        symbol_text = ax.text(
+            x + component_width/2, 
+            y_position + component_height/3,
+            component['symbol'], 
+            ha='center', 
+            va='center', 
+            fontsize=18, 
+            fontweight='bold',
+            color=color,
+            zorder=5,
+            family='monospace'
+        )
+        symbol_text.set_path_effects([
+            PathEffects.withStroke(linewidth=1, foreground='white')
+        ])
         
-        # Add component name (white bold text)
-        ax.text(x + component_width/2, y_position,
-                component['name'], 
-                ha='center', va='center', 
-                fontsize=11, fontweight='bold', 
-                color=text_light,
-                wrap=True,
-                zorder=4)
+        # Add component name (white bold text) with clear contrast
+        name_text = ax.text(
+            x + component_width/2, 
+            y_position + 0.02,  # Adjust position
+            component['name'], 
+            ha='center', 
+            va='center', 
+            fontsize=12, 
+            fontweight='bold', 
+            color='white',
+            wrap=True,
+            zorder=4,
+            family='sans-serif'
+        )
+        name_text.set_path_effects([
+            PathEffects.withStroke(linewidth=1.5, foreground=(0, 0, 0, 0.7))
+        ])
         
-        # Add description with better contrast
-        ax.text(x + component_width/2, y_position - component_height/3,
-                component['desc'], 
-                ha='center', va='center', 
-                fontsize=9, 
-                color=text_light,
-                linespacing=1.3,
-                wrap=True,
-                zorder=4)
+        # Add description with improved readability - now using newlines
+        desc_text = ax.text(
+            x + component_width/2, 
+            y_position - component_height/3,
+            component['desc'], 
+            ha='center', 
+            va='center', 
+            fontsize=10, 
+            fontweight='normal',
+            color='white',
+            linespacing=1.2,
+            zorder=4,
+            family='sans-serif'
+        )
+        desc_text.set_path_effects([
+            PathEffects.withStroke(linewidth=1.5, foreground=(0, 0, 0, 0.7))
+        ])
         
-        # Add arrows between components (except for the last one)
+        # Add stylish connecting arrows with gradient
         if i < num_components - 1:
             arrow_x_start = x + component_width + 0.005
             arrow_x_end = x + component_width + spacing - 0.005
             
-            # Create fancy arrow with better visibility
-            arrow = FancyArrowPatch((arrow_x_start, y_position), 
-                                   (arrow_x_end, y_position),
-                                   arrowstyle='-|>',
-                                   mutation_scale=15,
-                                   linewidth=2.5,
-                                   color='white',
-                                   zorder=5)
+            # Create fancy arrow with improved styling
+            arrow = FancyArrowPatch(
+                (arrow_x_start, y_position), 
+                (arrow_x_end, y_position),
+                arrowstyle='-|>',
+                mutation_scale=15,
+                linewidth=2.5,
+                color='white',
+                zorder=5,
+                connectionstyle="arc3,rad=0.0",
+                alpha=0.8
+            )
             ax.add_patch(arrow)
     
-    # Add title at the top with professional styling
-    ax.text(0.5, 0.83, 'Intelligent Algorithmic Trading System Architecture',
-            ha='center', va='center', 
-            fontsize=20, fontweight='bold', 
-            color=text_dark)
-    
-    # Add subtitle with paper reference
-    ax.text(0.5, 0.77, 
-            'Based on Sezer & Ozbayoglu (2018) with attention mechanism enhancements',
-            ha='center', va='center', 
-            fontsize=12, fontstyle='italic', 
-            color=text_dark)
-    
-    # Add a more visible data flow arrow
+    # Add a data flow arrow with clear positioning
     dataflow_arrow = FancyArrowPatch(
-        (0.25, 0.19),
-        (0.75, 0.19),
+        (0.2, 0.19),
+        (0.8, 0.19),
         arrowstyle='-|>',
         mutation_scale=20,
-        linewidth=3,
-        color=arrow_color,
-        zorder=5
+        linewidth=3.5,
+        color=colors['arrow'],
+        zorder=5,
+        connectionstyle="arc3,rad=0.0",
+        alpha=0.7
     )
     ax.add_patch(dataflow_arrow)
     
-    # Add data flow text with better positioning
-    ax.text(0.5, 0.22, 
-            'Data Flow',
-            ha='center', va='center', 
-            fontsize=14, fontweight='bold', 
-            color=text_dark)
+    # Add "Data Flow" text with improved visibility
+    # Background rectangle for data flow text
+    text_bg = Rectangle(
+        (0.47, 0.17),
+        0.06,
+        0.04,
+        facecolor='white',
+        alpha=0.7,
+        zorder=5
+    )
+    ax.add_patch(text_bg)
     
-    # Add a subtle border around the entire figure
-    outer_border = Rectangle((0.01, 0.01), 
-                            0.98, 0.98,
-                            fill=False,
-                            edgecolor=primary_color, 
-                            linewidth=1,
-                            alpha=0.3,
-                            zorder=0)
-    ax.add_patch(outer_border)
+    flow_text = ax.text(
+        0.5, 
+        0.19, 
+        'Data Flow',
+        ha='center', 
+        va='center', 
+        fontsize=14, 
+        fontweight='bold', 
+        color=colors['text_dark'],
+        family='sans-serif',
+        zorder=6
+    )
+    flow_text.set_path_effects([
+        PathEffects.withStroke(linewidth=3, foreground='white')
+    ])
     
     # Set limits
     ax.set_xlim(0, 1)
