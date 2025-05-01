@@ -761,7 +761,7 @@ def display_model_training():
                     mode='min', 
                     factor=0.5, 
                     patience=5, 
-                    verbose=True
+                   # verbose=True
                 )
                 
                 # Define loss function for multi-class classification

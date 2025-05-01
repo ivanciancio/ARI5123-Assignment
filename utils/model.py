@@ -378,7 +378,7 @@ class CNNTradingModel:
             mode='min', 
             factor=0.5, 
             patience=5, 
-            verbose=True
+          #   verbose=True
         )
         
         # Define loss function - Cross Entropy for multi-class classification
