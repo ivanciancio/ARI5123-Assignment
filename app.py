@@ -2,7 +2,7 @@
 Intelligent Algorithmic Trading System
 
 This Streamlit application implements an intelligent algorithmic trading system using
-Convolutional Neural Networks (CNNs) based on the approach from Sezer & Ozbayoglu (2018).
+Convolutional Neural Networks (CNNs) based on the approach from Sezer & Ozbayoglu (2019).
 
 The system allows users to:
 1. Download historical stock data
@@ -134,7 +134,7 @@ def main():
     <div class="info-box">
         This application implements an intelligent algorithmic trading system using Convolutional Neural Networks (CNNs).
         The approach is based on the paper "Financial Trading Model with Stock Bar Chart Image Time Series with Deep 
-        Convolutional Neural Networks" by Sezer & Ozbayoglu (2018) with modern enhancements.
+        Convolutional Neural Networks" by Sezer & Ozbayoglu (2019) with modern enhancements.
     </div>
     """, unsafe_allow_html=True)
     
@@ -177,7 +177,7 @@ def display_introduction():
     ### Implementation Details
     
     The implementation is based on the paper "Financial Trading Model with Stock Bar Chart Image Time Series with Deep 
-    Convolutional Neural Networks" by Sezer & Ozbayoglu (2018), with several modern enhancements:
+    Convolutional Neural Networks" by Sezer & Ozbayoglu (2019), with several modern enhancements:
     
     1. **Enhanced CNN Architecture**: Incorporates attention mechanisms and batch normalisation
     2. **Advanced Feature Engineering**: Uses a broader set of technical indicators and price transformations
@@ -255,7 +255,7 @@ def display_data_preparation():
     
     st.markdown("""
     <div class="info-box">
-        For accurate benchmarking against Sezer & Ozbayoglu (2018), we use the same date range from their paper:
+        For accurate benchmarking against Sezer & Ozbayoglu (2019), we use the same date range from their paper:
         January 1, 2007 to December 31, 2017. This ensures a fair comparison with their results.
     </div>
     """, unsafe_allow_html=True)
@@ -318,7 +318,7 @@ def display_data_preparation():
                     st.success(f"Successfully downloaded data for {selected_ticker}")
                     # Extra info about benchmark alignment
                     if (start_date_str == "01/01/2007" and end_date_str == "31/12/2017"):
-                        st.info("✓ Using the exact date range from Sezer & Ozbayoglu (2018) paper for proper benchmarking.")
+                        st.info("✓ Using the exact date range from Sezer & Ozbayoglu (2019) paper for proper benchmarking.")
                     else:
                         st.warning("⚠️ Not using the exact benchmark date range. Consider using 01/01/2007 to 31/12/2017 for a fair comparison.")
                 else:
@@ -430,7 +430,7 @@ def display_data_preparation():
     # Benchmark info
     with st.expander("📚 Benchmark Information"):
         st.markdown("""
-        ### Sezer & Ozbayoglu (2018) Paper Details
+        ### Sezer & Ozbayoglu (2019) Paper Details
         
         **Date Range:**
         - Training Period: January 1, 2007 - December 31, 2015
