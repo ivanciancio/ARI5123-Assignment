@@ -223,7 +223,7 @@ def display_introduction():
             ax.set_ylim(-0.2, 1)
             
             st.pyplot(fig)
-            st.error(f"Could not display improved architecture diagram: {str(e)}")
+            st.error(f"Could not display architecture diagram: {str(e)}")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -514,7 +514,7 @@ def display_data_preparation():
     st.markdown('</div>', unsafe_allow_html=True)
 
 def display_model_training():
-    """Display model training page with improved model and settings."""
+    """Display model training page with model and settings."""
     st.markdown('<div class="sub-header">Model Training</div>', unsafe_allow_html=True)
     
     if 'prepared_data' not in st.session_state or st.session_state.prepared_data is None:
@@ -598,17 +598,17 @@ def display_model_training():
     st.warning("""
     ⚠️ **Overfitting Prevention Enabled**
     
-    The improved model includes several anti-overfitting measures:
+    The model includes several anti-overfitting measures:
     - Reduced model complexity (fewer parameters)
     - Increased dropout rates (0.5, 0.7)
-    - Batch normalization
+    - Batch normalisation
     - Early stopping on validation loss
     - Learning rate scheduling
     
     **Expected results**: Lower training accuracy (~60-70%) but better validation accuracy (~45-55%)
     """)
     
-    if st.button("Train Improved Model"):
+    if st.button("Train Model"):
         try:
             progress_container = st.container()
             
@@ -771,7 +771,7 @@ def display_model_training():
     st.markdown('</div>', unsafe_allow_html=True)
 
 def display_trading_strategy():
-    """Display trading strategy page with improved defaults."""
+    """Display trading strategy page with optimised defaults."""
     st.markdown('<div class="sub-header">Trading Strategy</div>', unsafe_allow_html=True)
     
     if 'model' not in st.session_state or st.session_state.model is None:
@@ -856,7 +856,7 @@ def display_trading_strategy():
         st.write(f"- Above 50%: {np.sum(max_probs > 0.5) / len(max_probs):.1%}")
     
     if st.button("Execute Trading Strategy"):
-        with st.spinner("Executing improved trading strategy..."):
+        with st.spinner("Executing trading strategy..."):
             
             data = st.session_state.data
             ticker = prepared_data['ticker']
@@ -897,12 +897,28 @@ def display_trading_strategy():
             strategy.reset()
             random_results = strategy.apply_random_strategy(prices)
             
+            # Run CNN strategy
+            strategy_results = strategy.apply_strategy(prices, signals, aligned_dates)
+            strategy_portfolio = strategy.get_portfolio_values().copy()  # Capture CNN strategy portfolio
+            strategy_trades = strategy.get_trades().copy()  # Capture CNN strategy trades
+
+            # Reset and run buy-and-hold
+            strategy.reset()
+            benchmark_results = strategy.apply_buy_and_hold(prices)
+            benchmark_portfolio = strategy.get_portfolio_values().copy()  # Capture buy-and-hold portfolio
+
+            # Reset and run random strategy
+            strategy.reset()
+            random_results = strategy.apply_random_strategy(prices)
+            random_portfolio = strategy.get_portfolio_values().copy()  # Capture random portfolio (if needed)
+
+            # Store all results in session state
             st.session_state.strategy_results = strategy_results
             st.session_state.benchmark_results = benchmark_results
             st.session_state.random_results = random_results
-            st.session_state.strategy_portfolio = strategy.get_portfolio_values()
-            st.session_state.benchmark_portfolio = strategy.get_portfolio_values()
-            st.session_state.trades = strategy.get_trades()
+            st.session_state.strategy_portfolio = strategy_portfolio  # CNN strategy portfolio
+            st.session_state.benchmark_portfolio = benchmark_portfolio  # Buy-and-hold portfolio
+            st.session_state.trades = strategy_trades  # CNN strategy trades
             st.session_state.test_dates = aligned_dates
             
             st.markdown("#### Strategy Performance")
