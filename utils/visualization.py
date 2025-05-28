@@ -5,16 +5,13 @@ This module provides functions for visualising trading data, model performance, 
 """
 
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import seaborn as sns
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import plotly.express as px
-from sklearn.metrics import confusion_matrix, roc_curve, auc, classification_report
-
-from matplotlib.patches import FancyArrowPatch, Rectangle
+from sklearn.metrics import confusion_matrix, roc_curve, auc
+import seaborn as sns
+from matplotlib.patches import FancyArrowPatch, Rectangle, Ellipse
 import matplotlib.patheffects as PathEffects
 
 # Set British English style for plots
@@ -25,66 +22,6 @@ plt.rcParams['ytick.labelsize'] = 10
 plt.rcParams['legend.fontsize'] = 10
 plt.rcParams['figure.titlesize'] = 16
 plt.style.use('seaborn-v0_8-darkgrid')
-
-
-def plot_stock_data(data, ticker, start_date=None, end_date=None, figsize=(14, 8)):
-    """
-    Plot stock data with volume.
-    
-    Args:
-        data: Dictionary of DataFrames with stock data
-        ticker: Stock ticker to plot
-        start_date: Start date for plotting
-        end_date: End date for plotting
-        figsize: Figure size
-        
-    Returns:
-        Matplotlib figure
-    """
-    if ticker not in data:
-        raise ValueError(f"Ticker {ticker} not found in data")
-    
-    # Get stock data
-    df = data[ticker].copy()
-    
-    # Filter by date if provided
-    if start_date:
-        df = df[df.index >= start_date]
-    if end_date:
-        df = df[df.index <= end_date]
-    
-    # Create figure
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize, gridspec_kw={'height_ratios': [3, 1]}, sharex=True)
-    
-    # Plot price data
-    ax1.plot(df.index, df['Close'], label='Close Price', color='blue')
-    ax1.plot(df.index, df['Open'], label='Open Price', color='green', alpha=0.5)
-    
-    # Add moving averages if available
-    if 'SMA_20' in df.columns:
-        ax1.plot(df.index, df['SMA_20'], label='20-day SMA', color='orange', linestyle='--')
-    if 'SMA_50' in df.columns:
-        ax1.plot(df.index, df['SMA_50'], label='50-day SMA', color='red', linestyle='--')
-    
-    # Customise price plot
-    ax1.set_title(f"{ticker} Stock Price")
-    ax1.set_ylabel("Price (£)")
-    ax1.grid(True)
-    ax1.legend()
-    
-    # Plot volume data
-    ax2.bar(df.index, df['Volume'], color='purple', alpha=0.5)
-    ax2.set_title(f"{ticker} Trading Volume")
-    ax2.set_ylabel("Volume")
-    ax2.set_xlabel("Date")
-    ax2.grid(True)
-    
-    # Format x-axis
-    fig.autofmt_xdate()
-    
-    plt.tight_layout()
-    return fig
-
 
 def plot_model_training_history(history, figsize=(12, 8)):
     """
@@ -123,128 +60,6 @@ def plot_model_training_history(history, figsize=(12, 8)):
     
     plt.tight_layout()
     return fig
-
-
-def plot_model_evaluation(y_true, y_pred_prob, figsize=(16, 12)):
-    """
-    Plot model evaluation metrics including ROC curve and confusion matrix.
-    
-    Args:
-        y_true: True labels
-        y_pred_prob: Predicted probabilities
-        figsize: Figure size
-        
-    Returns:
-        Matplotlib figure
-    """
-    # Convert probabilities to binary predictions
-    y_pred = (y_pred_prob > 0.5).astype(int).flatten()
-    
-    # Create figure
-    fig, axes = plt.subplots(2, 2, figsize=figsize)
-    
-    # Plot ROC curve
-    fpr, tpr, thresholds = roc_curve(y_true, y_pred_prob)
-    roc_auc = auc(fpr, tpr)
-    
-    axes[0, 0].plot(fpr, tpr, label=f'ROC curve (AUC = {roc_auc:.3f})')
-    axes[0, 0].plot([0, 1], [0, 1], 'k--')
-    axes[0, 0].set_xlim([0.0, 1.0])
-    axes[0, 0].set_ylim([0.0, 1.05])
-    axes[0, 0].set_xlabel('False Positive Rate')
-    axes[0, 0].set_ylabel('True Positive Rate')
-    axes[0, 0].set_title('Receiver Operating Characteristic')
-    axes[0, 0].legend(loc="lower right")
-    axes[0, 0].grid(True)
-    
-    # Plot confusion matrix
-    cm = confusion_matrix(y_true, y_pred)
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False, ax=axes[0, 1])
-    axes[0, 1].set_xlabel('Predicted Label')
-    axes[0, 1].set_ylabel('True Label')
-    axes[0, 1].set_title('Confusion Matrix')
-    
-    # Plot precision-recall curve
-    sorted_indices = np.argsort(y_pred_prob.flatten())
-    thresholds = y_pred_prob.flatten()[sorted_indices]
-    y_true_sorted = y_true[sorted_indices]
-    
-    precisions = []
-    recalls = []
-    
-    for threshold in np.unique(thresholds):
-        y_pred_threshold = (y_pred_prob >= threshold).astype(int).flatten()
-        
-        # Calculate precision and recall
-        tp = np.sum((y_pred_threshold == 1) & (y_true == 1))
-        fp = np.sum((y_pred_threshold == 1) & (y_true == 0))
-        fn = np.sum((y_pred_threshold == 0) & (y_true == 1))
-        
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 1.0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        
-        precisions.append(precision)
-        recalls.append(recall)
-    
-    axes[1, 0].plot(recalls, precisions)
-    axes[1, 0].set_xlabel('Recall')
-    axes[1, 0].set_ylabel('Precision')
-    axes[1, 0].set_title('Precision-Recall Curve')
-    axes[1, 0].grid(True)
-    
-    # Plot signal distribution
-    axes[1, 1].hist(y_pred_prob[y_true == 1], alpha=0.5, label='Positive class', bins=20)
-    axes[1, 1].hist(y_pred_prob[y_true == 0], alpha=0.5, label='Negative class', bins=20)
-    axes[1, 1].set_xlabel('Predicted Probability')
-    axes[1, 1].set_ylabel('Frequency')
-    axes[1, 1].set_title('Signal Distribution')
-    axes[1, 1].legend()
-    axes[1, 1].grid(True)
-    
-    plt.tight_layout()
-    return fig
-
-
-def plot_portfolio_performance(portfolio_values, benchmark_values=None, dates=None, figsize=(14, 8)):
-    """
-    Plot portfolio performance compared to benchmark.
-    
-    Args:
-        portfolio_values: Array of portfolio values
-        benchmark_values: Array of benchmark values (optional)
-        dates: Array of dates (optional)
-        figsize: Figure size
-        
-    Returns:
-        Matplotlib figure
-    """
-    # Create figure
-    fig, ax = plt.subplots(figsize=figsize)
-    
-    # Use dates if provided, otherwise use indices
-    x = dates if dates is not None else np.arange(len(portfolio_values))
-    
-    # Plot portfolio values
-    ax.plot(x, portfolio_values, label='Strategy', color='blue')
-    
-    # Plot benchmark values if provided
-    if benchmark_values is not None:
-        ax.plot(x, benchmark_values, label='Buy and Hold', color='green', linestyle='--')
-    
-    # Customise plot
-    ax.set_title('Portfolio Performance')
-    ax.set_ylabel('Portfolio Value (£)')
-    ax.set_xlabel('Date' if dates is not None else 'Trading Day')
-    ax.grid(True)
-    ax.legend()
-    
-    # Format x-axis for dates
-    if dates is not None:
-        fig.autofmt_xdate()
-    
-    plt.tight_layout()
-    return fig
-
 
 def plot_interactive_portfolio(portfolio_values, benchmark_values=None, dates=None, trades=None):
     """
@@ -305,7 +120,7 @@ def plot_interactive_portfolio(portfolio_values, benchmark_values=None, dates=No
                             buy_y_values.append(portfolio_values[indices[0]])
                             valid_buy_dates.append(date)
                         else:
-                            # If date not found, try with closest date or skip
+                            # If date not found, skip
                             continue
                     else:
                         # If no dates provided, use integer index
@@ -348,7 +163,7 @@ def plot_interactive_portfolio(portfolio_values, benchmark_values=None, dates=No
                             sell_y_values.append(portfolio_values[indices[0]])
                             valid_sell_dates.append(date)
                         else:
-                            # If date not found, try with closest date or skip
+                            # If date not found, skip
                             continue
                     else:
                         # If no dates provided, use integer index
@@ -394,220 +209,6 @@ def plot_interactive_portfolio(portfolio_values, benchmark_values=None, dates=No
     
     return fig
 
-
-def plot_strategy_comparison(strategies_results, figsize=(12, 10)):
-    """
-    Plot comparison of different trading strategies.
-    
-    Args:
-        strategies_results: Dictionary of strategy names and their performance metrics
-        figsize: Figure size
-        
-    Returns:
-        Matplotlib figure
-    """
-    # Extract metrics for comparison
-    metrics = ['total_return', 'annualized_return', 'sharpe_ratio', 'max_drawdown', 'win_rate']
-    metrics_labels = ['Total Return', 'Annualized Return', 'Sharpe Ratio', 'Max Drawdown', 'Win Rate']
-    
-    # Create figure
-    fig, axes = plt.subplots(len(metrics), 1, figsize=figsize)
-    
-    # Plot each metric
-    for i, (metric, label) in enumerate(zip(metrics, metrics_labels)):
-        values = [results[metric] for results in strategies_results.values()]
-        
-        # Handle percentage metrics
-        if metric in ['total_return', 'annualized_return', 'max_drawdown', 'win_rate']:
-            values = [v * 100 for v in values]
-            ylabel = f"{label} (%)"
-        else:
-            ylabel = label
-        
-        # Create bar chart
-        bars = axes[i].bar(strategies_results.keys(), values)
-        
-        # Add value labels
-        for bar in bars:
-            height = bar.get_height()
-            axes[i].annotate(f'{height:.2f}',
-                             xy=(bar.get_x() + bar.get_width() / 2, height),
-                             xytext=(0, 3),  # 3 points vertical offset
-                             textcoords="offset points",
-                             ha='center', va='bottom')
-        
-        # Customise subplot
-        axes[i].set_title(label)
-        axes[i].set_ylabel(ylabel)
-        axes[i].grid(True, axis='y')
-    
-    plt.tight_layout()
-    return fig
-
-
-def plot_feature_importance(model, feature_names, figsize=(10, 8)):
-    """
-    Plot feature importance for the model.
-    Note: This works for models that provide feature_importances_ attribute.
-    
-    Args:
-        model: Trained model with feature_importances_ attribute
-        feature_names: List of feature names
-        figsize: Figure size
-        
-    Returns:
-        Matplotlib figure
-    """
-    # Extract feature importance if available
-    if hasattr(model, 'feature_importances_'):
-        importances = model.feature_importances_
-    else:
-        raise ValueError("Model does not have feature_importances_ attribute")
-    
-    # Create DataFrame for plotting
-    importance_df = pd.DataFrame({
-        'Feature': feature_names,
-        'Importance': importances
-    })
-    
-    # Sort by importance
-    importance_df = importance_df.sort_values('Importance', ascending=False)
-    
-    # Create figure
-    fig, ax = plt.subplots(figsize=figsize)
-    
-    # Plot feature importance
-    sns.barplot(x='Importance', y='Feature', data=importance_df, ax=ax)
-    
-    # Customise plot
-    ax.set_title('Feature Importance')
-    ax.set_xlabel('Importance')
-    ax.set_ylabel('Feature')
-    ax.grid(True, axis='x')
-    
-    plt.tight_layout()
-    return fig
-
-
-def create_performance_report(strategy_results, benchmark_results=None):
-    """
-    Create a formatted performance report for the strategy.
-    
-    Args:
-        strategy_results: Dictionary with strategy performance metrics
-        benchmark_results: Dictionary with benchmark performance metrics (optional)
-        
-    Returns:
-        Formatted HTML string with performance report
-    """
-    # Create HTML report
-    html = """
-    <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #2c3e50; text-align: center;">Trading Strategy Performance Report</h2>
-        <div style="background-color: #f8f9fa; border-radius: 5px; padding: 15px; margin-top: 20px;">
-            <h3 style="color: #3498db;">Performance Metrics</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr style="background-color: #3498db; color: white;">
-                    <th style="padding: 10px; text-align: left;">Metric</th>
-                    <th style="padding: 10px; text-align: right;">Strategy</th>
-    """
-    
-    # Add benchmark header if provided
-    if benchmark_results:
-        html += '<th style="padding: 10px; text-align: right;">Benchmark</th>'
-    
-    html += """
-                </tr>
-    """
-    
-    # Define metrics to display
-    metrics = [
-        ('total_return', 'Total Return', '{:.2%}'),
-        ('annualized_return', 'Annualized Return', '{:.2%}'),
-        ('sharpe_ratio', 'Sharpe Ratio', '{:.2f}'),
-        ('max_drawdown', 'Maximum Drawdown', '{:.2%}'),
-        ('win_rate', 'Win Rate', '{:.2%}'),
-        ('profit_factor', 'Profit Factor', '{:.2f}'),
-        ('number_of_trades', 'Number of Trades', '{:.0f}'),
-        ('final_value', 'Final Portfolio Value', '£{:.2f}')
-    ]
-    
-    # Add each metric to the table
-    for i, (metric, label, fmt) in enumerate(metrics):
-        # Determine row style
-        row_style = 'background-color: #ecf0f1;' if i % 2 == 0 else ''
-        
-        # Format the values
-        if metric == 'final_value':
-            strategy_value = fmt.format(strategy_results[metric])
-            if benchmark_results:
-                benchmark_value = fmt.format(benchmark_results[metric])
-        else:
-            strategy_value = fmt.format(strategy_results[metric])
-            if benchmark_results:
-                benchmark_value = fmt.format(benchmark_results[metric])
-        
-        # Add row to the table
-        html += f"""
-            <tr style="{row_style}">
-                <td style="padding: 10px; text-align: left;">{label}</td>
-                <td style="padding: 10px; text-align: right;">{strategy_value}</td>
-        """
-        
-        # Add benchmark value if provided
-        if benchmark_results:
-            # Determine if strategy outperformed benchmark
-            if metric in ['total_return', 'annualized_return', 'sharpe_ratio', 'win_rate', 'profit_factor', 'final_value']:
-                if strategy_results[metric] > benchmark_results[metric]:
-                    cell_style = 'color: green;'
-                elif strategy_results[metric] < benchmark_results[metric]:
-                    cell_style = 'color: red;'
-                else:
-                    cell_style = ''
-            elif metric in ['max_drawdown']:
-                if strategy_results[metric] < benchmark_results[metric]:
-                    cell_style = 'color: green;'
-                elif strategy_results[metric] > benchmark_results[metric]:
-                    cell_style = 'color: red;'
-                else:
-                    cell_style = ''
-            else:
-                cell_style = ''
-                
-            html += f"""
-                <td style="padding: 10px; text-align: right; {cell_style}">{benchmark_value}</td>
-            """
-        
-        html += """
-            </tr>
-        """
-    
-    # Close the table and add additional information
-    html += """
-            </table>
-        </div>
-        
-        <div style="background-color: #f8f9fa; border-radius: 5px; padding: 15px; margin-top: 20px;">
-            <h3 style="color: #3498db;">Interpretation</h3>
-            <p style="line-height: 1.5;">
-                The Sharpe ratio measures the risk-adjusted return, with higher values indicating better risk-adjusted performance.
-                A Sharpe ratio above 1.0 is generally considered good, while above 2.0 is excellent.
-            </p>
-            <p style="line-height: 1.5;">
-                The maximum drawdown represents the largest peak-to-trough decline and is a measure of downside risk.
-                Lower values are better.
-            </p>
-            <p style="line-height: 1.5;">
-                The win rate shows the percentage of profitable trades, while the profit factor is the ratio of gross profits to gross losses.
-                A profit factor above 1.0 indicates a profitable strategy.
-            </p>
-        </div>
-    </div>
-    """
-    
-    return html  # Added the missing return statement
-
-
 def create_improved_architecture_diagram():
     """
     Create a visually enhanced architecture diagram for the trading system
@@ -616,14 +217,10 @@ def create_improved_architecture_diagram():
     Returns:
         Matplotlib figure
     """
-    from matplotlib.patches import Rectangle, FancyArrowPatch, Ellipse
-    import matplotlib.pyplot as plt
-    import matplotlib.patheffects as PathEffects
-    
     # Create figure with a premium white background
     plt.rcParams['figure.facecolor'] = 'white'
     plt.rcParams['axes.facecolor'] = 'white'
-    fig, ax = plt.subplots(figsize=(16, 9), facecolor='white')  # Larger figure size
+    fig, ax = plt.subplots(figsize=(16, 9), facecolor='white')
     ax.set_facecolor('white')
     
     # Remove axes
@@ -631,17 +228,17 @@ def create_improved_architecture_diagram():
     
     # Define an improved color palette
     colors = {
-        'primary': '#3b82f6',      # Main blue
-        'secondary': '#1e40af',    # Dark blue
-        'accent1': '#34d399',      # Teal accent
-        'accent2': '#f97316',      # Orange accent
-        'background': '#f8fafc',   # Very light gray
-        'text_dark': '#0f172a',    # Near black
-        'text_light': '#f8fafc',   # Near white
-        'gradient_top': '#3b82f6', # Gradient top color
-        'gradient_bottom': '#1e40af', # Gradient bottom color
-        'arrow': '#0369a1',        # Arrow blue
-        'shadow': (0, 0, 0, 0.5)   # Shadow color as a proper RGBA tuple
+        'primary': '#3b82f6',
+        'secondary': '#1e40af',
+        'accent1': '#34d399',
+        'accent2': '#f97316',
+        'background': '#f8fafc',
+        'text_dark': '#0f172a',
+        'text_light': '#f8fafc',
+        'gradient_top': '#3b82f6',
+        'gradient_bottom': '#1e40af',
+        'arrow': '#0369a1',
+        'shadow': (0, 0, 0, 0.5)
     }
     
     # Component details with improved descriptions
@@ -650,43 +247,43 @@ def create_improved_architecture_diagram():
             'name': 'Historical\nStock Data',
             'desc': 'OHLCV data from\nYahoo Finance',
             'symbol': 'D',
-            'color': '#4f46e5'  # Indigo
+            'color': '#4f46e5'
         },
         {
             'name': 'Data\nPreprocessing',
             'desc': 'Normalisation &\nsequence creation',
             'symbol': 'P',
-            'color': '#8b5cf6'  # Purple
+            'color': '#8b5cf6'
         },
         {
             'name': 'Feature\nEngineering',
             'desc': 'Technical indicators\n& patterns',
             'symbol': 'F',
-            'color': '#3b82f6'  # Blue
+            'color': '#3b82f6'
         },
         {
             'name': 'CNN Model',
             'desc': 'Deep learning\nwith attention',
             'symbol': 'M',
-            'color': '#0ea5e9'  # Sky blue
+            'color': '#0ea5e9'
         },
         {
             'name': 'Trading\nSignals',
             'desc': 'Buy/sell probability\npredictions',
             'symbol': 'S',
-            'color': '#14b8a6'  # Teal
+            'color': '#14b8a6'
         },
         {
             'name': 'Trading\nStrategy',
             'desc': 'Position sizing &\nrisk management',
             'symbol': 'T',
-            'color': '#10b981'  # Emerald
+            'color': '#10b981'
         },
         {
             'name': 'Performance\nEvaluation',
             'desc': 'Return & risk\nmetrics analysis',
             'symbol': 'E',
-            'color': '#22c55e'  # Green
+            'color': '#22c55e'
         }
     ]
     
@@ -733,8 +330,8 @@ def create_improved_architecture_diagram():
     
     # Define component dimensions and positions with more space
     num_components = len(components)
-    component_width = 0.12  # Increased width
-    component_height = 0.45  # Slightly shorter to prevent overlap
+    component_width = 0.12
+    component_height = 0.45
     total_width = 0.88
     spacing = (total_width - (num_components * component_width)) / (num_components - 1)
     
@@ -803,7 +400,7 @@ def create_improved_architecture_diagram():
         # Add component name (white bold text) with clear contrast
         name_text = ax.text(
             x + component_width/2, 
-            y_position + 0.02,  # Adjust position
+            y_position + 0.02,
             component['name'], 
             ha='center', 
             va='center', 
@@ -818,7 +415,7 @@ def create_improved_architecture_diagram():
             PathEffects.withStroke(linewidth=1.5, foreground=(0, 0, 0, 0.7))
         ])
         
-        # Add description with improved readability - now using newlines
+        # Add description with improved readability
         desc_text = ax.text(
             x + component_width/2, 
             y_position - component_height/3,

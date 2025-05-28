@@ -6,6 +6,5 @@ seaborn
 scikit-learn
 torch
 yfinance
-ta
 plotly
 torchinfo
