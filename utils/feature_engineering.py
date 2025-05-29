@@ -57,15 +57,15 @@ class FeatureEngineer:
         return img
     
     def generate_improved_labels(self, data, ticker, window_size=30, 
-                               prediction_horizon=5, train_data=None):
+                            prediction_horizon=3, train_data=None):  # CHANGED: 5 to 3 days
         """
-        Generate labels with improved methodology.
+        Generate labels with OPTIMIZED methodology for better accuracy.
         
         Key improvements:
-        - Shorter prediction horizon (5 days instead of 15)
+        - Shorter prediction horizon (3 vs 5 days)
         - More conservative thresholds
         - Better balance between classes
-        - Use volatility-adjusted thresholds
+        - Volatility-adjusted thresholds
         """
         close_prices = data['Close'].values
         
@@ -73,26 +73,26 @@ class FeatureEngineer:
         returns = pd.Series(close_prices).pct_change().dropna()
         volatility = returns.std()
         
-        # Adaptive thresholds based on volatility
+        # OPTIMIZED: More conservative adaptive thresholds
         if train_data is not None:
             train_prices = train_data['Close'].values
             train_returns = pd.Series(train_prices).pct_change().dropna()
             reference_vol = train_returns.std()
             
-            # Base thresholds on volatility
-            base_threshold = reference_vol * 0.5  # More conservative
+            # OPTIMIZED: Reduced from 0.5 to 0.3 for better accuracy
+            base_threshold = reference_vol * 0.3  # More conservative
             threshold_high = base_threshold
             threshold_low = -base_threshold
             
-            logger.info(f"Adaptive thresholds for {ticker}:")
+            logger.info(f"OPTIMIZED thresholds for {ticker}:")
             logger.info(f"  Volatility: {reference_vol:.4f}")
             logger.info(f"  High threshold: {threshold_high:.4f}")
             logger.info(f"  Low threshold: {threshold_low:.4f}")
         else:
             # Fallback to fixed thresholds
-            threshold_high = volatility * 0.5
-            threshold_low = -volatility * 0.5
-            logger.warning(f"Using fallback thresholds for {ticker}")
+            threshold_high = volatility * 0.3  # Reduced from 0.5
+            threshold_low = -volatility * 0.3
+            logger.warning(f"Using fallback OPTIMIZED thresholds for {ticker}")
         
         # Generate labels with shorter horizon
         labels = []
@@ -102,10 +102,10 @@ class FeatureEngineer:
             future_price = close_prices[i + window_size + prediction_horizon - 1]
             
             if current_price > 0:
-                # Calculate return over shorter horizon
+                # Calculate return over SHORTER horizon (3 days)
                 price_return = (future_price - current_price) / current_price
                 
-                # Classify with more conservative thresholds
+                # Classify with MORE CONSERVATIVE thresholds
                 if price_return > threshold_high:
                     label = 1  # Buy
                 elif price_return < threshold_low:
@@ -121,7 +121,7 @@ class FeatureEngineer:
         
         # Log label distribution
         unique_labels, counts = np.unique(labels_array, return_counts=True)
-        logger.info(f"Improved label distribution for {ticker}:")
+        logger.info(f"OPTIMIZED label distribution for {ticker}:")
         for label, count in zip(unique_labels, counts):
             class_name = ['Hold', 'Buy', 'Sell'][int(label)]
             percentage = count / len(labels_array) * 100
@@ -228,20 +228,20 @@ class FeatureEngineer:
         return X_balanced, y_balanced
     
     def prepare_benchmark_features_improved(self, train_data, test_data, ticker, 
-                                          window_size=30, prediction_horizon=5,
-                                          balance_method='hybrid'):
+                                        window_size=30, prediction_horizon=3,  # CHANGED: 5 to 3
+                                        balance_method='hybrid'):
         """
-        Prepare features with all improvements applied.
+        Prepare features with ALL OPTIMIZATIONS applied.
         
         Key improvements:
-        - Shorter prediction horizon (5 vs 15 days)
+        - Shorter prediction horizon (3 vs 5 days) 
         - Better image creation
         - Dataset balancing
         - More robust validation split
         """
-        logger.info(f"Preparing IMPROVED benchmark features for {ticker}")
+        logger.info(f"Preparing OPTIMIZED benchmark features for {ticker}")
         
-        # Process training data with improved method
+        # Process training data with OPTIMIZED method
         train_images = []
         train_close_prices = train_data['Close'].values
         
@@ -255,7 +255,7 @@ class FeatureEngineer:
             img = self.create_bar_chart_image_improved(price_window, window_size)
             train_images.append(img)
         
-        # Generate improved labels
+        # Generate OPTIMIZED labels (3-day horizon)
         train_labels = self.generate_improved_labels(
             train_data, ticker, window_size, prediction_horizon, train_data
         )
@@ -269,7 +269,7 @@ class FeatureEngineer:
             img = self.create_bar_chart_image_improved(price_window, window_size)
             test_images.append(img)
         
-        # Generate test labels using same thresholds as training
+        # Generate test labels using same OPTIMIZED thresholds as training
         test_labels = self.generate_improved_labels(
             test_data, ticker, window_size, prediction_horizon, train_data
         )
@@ -316,11 +316,11 @@ class FeatureEngineer:
         X_train_final = X_train_balanced[:val_split]
         y_train_final = y_train_balanced[:val_split]
         
-        logger.info(f"Improved features prepared for {ticker}:")
+        logger.info(f"OPTIMIZED features prepared for {ticker}:")
         logger.info(f"  Training: {len(X_train_final)} samples (balanced)")
         logger.info(f"  Validation: {len(X_val)} samples")
         logger.info(f"  Testing: {len(X_test)} samples")
-        logger.info(f"  Prediction horizon: {prediction_horizon} days (improved from 15)")
+        logger.info(f"  Prediction horizon: {prediction_horizon} days (OPTIMIZED from 5)")
         
         return {
             'X_train': X_train_final,
@@ -335,11 +335,11 @@ class FeatureEngineer:
             'train_dates': train_data.index[window_size:-prediction_horizon],
             'test_dates': test_data.index[window_size:-prediction_horizon],
             'improvements_applied': [
-                f'Shorter prediction horizon: {prediction_horizon} days',
+                f'OPTIMIZED prediction horizon: {prediction_horizon} days',
                 f'Dataset balancing: {balance_method}',
                 'Improved image normalization',
                 'Noise injection for generalization',
-                'Volatility-adjusted thresholds'
+                'OPTIMIZED volatility-adjusted thresholds (0.3 vs 0.5)'
             ]
         }
     

@@ -119,9 +119,11 @@ def main():
     """, unsafe_allow_html=True)
     
     st.markdown("""
-    **Workflow:**
-    1. **Data Preparation → Model Training → Trading Strategy → Performance Analysis:** Detailed single-stock analysis
-    2. **Comprehensive Benchmark Experiment:** Multi-stock comparison with benchmark paper
+    **Experimental Workflow:**
+    1. **Data Preparation → CNN Training → Trading Strategy → Performance Analysis**
+    2. **Multiple Configurations:** Simple/Advanced CNN architectures with Fixed/Dynamic signal processing
+    3. **Benchmark Comparison:** Evaluation against Sezer & Ozbayoglu (2018) methodology
+    4. **Important Note:** Results vary between runs due to neural network stochasticity
     """)
     
     # Create sidebar for navigation
@@ -156,30 +158,41 @@ def display_introduction():
     
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.markdown("""
-    ### Project Overview
-    
+    ### 📊 Project Overview
+
     This project implements an intelligent algorithmic trading system using Convolutional Neural Networks (CNNs).
     The system is designed to analyse historical stock data, identify patterns, and make trading decisions.
-    
-    ### Key Features
-    
+
+    ### ⭐ Key Features
+
     - **CNN-based Trading Model**: Utilises deep learning to identify patterns in stock price movements
     - **Technical Indicator Analysis**: Incorporates various technical indicators for enhanced feature extraction
     - **Automated Trading Strategy**: Implements a trading strategy based on model predictions
     - **Performance Evaluation**: Compares strategy performance against benchmarks
-    
-    ### Implementation Details
-    
+
+    ### 🧪 Experimental Framework
+
+    **CNN-BI Implementation Based on Sezer & Ozbayoglu (2018):**
+    - **Benchmark Paper Target:** 7.20% annualised return (2007-2012 period)
+    - **Multiple Architectures:** Simple and Advanced CNN configurations available
+    - **Signal Processing:** Fixed and Dynamic threshold methods implemented  
+    - **Test Periods:** 2007-2012 (crisis) and 2012-2017 (bull market) evaluation
+
+    **Important:** Neural network training introduces variability - results will differ between runs. 
+    Multiple experiments recommended for robust performance assessment.
+
+    ### 🔧 Implementation Details
+
     The implementation is based on the paper "Financial Trading Model with Stock Bar Chart Image Time Series with Deep 
     Convolutional Neural Networks" by Sezer & Ozbayoglu (2018), with several modern enhancements:
-    
+
     1. **Enhanced CNN Architecture**: Incorporates attention mechanisms and batch normalisation
     2. **Advanced Feature Engineering**: Uses a broader set of technical indicators and price transformations
     3. **Improved Trading Strategy**: Implements position sizing and risk management techniques
     4. **Comprehensive Evaluation**: Provides detailed performance metrics and visualisations
-    
-    ### How to Use This Application
-    
+
+    ### 📋 How to Use This Application
+
     1. **Data Preparation**: Download and prepare historical stock data
     2. **Model Training**: Train and evaluate the CNN model
     3. **Trading Strategy**: Apply the trading strategy based on model predictions
@@ -286,6 +299,12 @@ def display_data_preparation():
     
     with col1:
         if st.button("1. Download Benchmark Data"):
+            # Clear all downstream results when downloading new data
+            for key in ['model', 'history', 'predictions', 'strategy_results', 'benchmark_results', 
+                       'random_results', 'strategy_portfolio', 'benchmark_portfolio', 'trades', 'test_dates']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            
             # Create a container for detailed progress
             progress_container = st.container()
             
@@ -410,6 +429,12 @@ def display_data_preparation():
         
         if st.button("2. Prepare Benchmark Features", disabled=prepare_disabled):
             if st.session_state.data is not None and selected_ticker in st.session_state.data:
+                # Clear downstream results when preparing new features
+                for key in ['model', 'history', 'predictions', 'strategy_results', 'benchmark_results', 
+                           'random_results', 'strategy_portfolio', 'benchmark_portfolio', 'trades', 'test_dates']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                
                 with st.spinner("Preparing benchmark features..."):
                     try:
                         data_loader = DataLoader()
@@ -555,14 +580,14 @@ def display_model_training():
     with col1:
         model_type = st.radio(
             "Model Architecture",
-            options=["Simple CNN (Recommended)", "Advanced CNN"],
-            index=0,
-            help="Simple CNN prevents overfitting on small datasets. Advanced CNN has more parameters."
+            options=["Simple CNN", "Advanced CNN"],
+            index=1,  # Advanced CNN default
+            help="Advanced CNN: More complex architecture with batch normalisation - potentially higher performance but greater variability. Simple CNN: Optimised for stability with enhanced regularisation."
         )
         
         epochs = st.slider("Training Epochs", min_value=10, max_value=200, value=100, step=5)
         
-        st.markdown("#### Regularization Settings")
+        st.markdown("#### Regularisation Settings")
         weight_decay = st.select_slider(
             "Weight Decay",
             options=[1e-5, 1e-4, 1e-3, 1e-2],
@@ -596,19 +621,24 @@ def display_model_training():
                                       help="Prevents exploding gradients")
     
     st.warning("""
-    ⚠️ **Overfitting Prevention Enabled**
-    
-    The model includes several anti-overfitting measures:
-    - Reduced model complexity (fewer parameters)
-    - Increased dropout rates (0.5, 0.7)
-    - Batch normalisation
-    - Early stopping on validation loss
-    - Learning rate scheduling
-    
-    **Expected results**: Lower training accuracy (~60-70%) but better validation accuracy (~45-55%)
+    ⚠️ **RESULT VARIABILITY NOTICE**
+
+    Neural network training is inherently stochastic, resulting in:
+    - **Different results each training run** due to random weight initialisation
+    - **Performance variation** across different CNN architectures and signal methods
+    - **Market regime sensitivity** - performance varies between volatile and bull market periods
+    - **Classification accuracy** typically ranges 35-40% (better than random 33%)
+
+    **Recommendation:** Run multiple experiments to assess typical performance range rather than relying on single results.
     """)
     
     if st.button("Train Model"):
+        # Clear downstream results when training new model
+        for key in ['strategy_results', 'benchmark_results', 'random_results', 'strategy_portfolio', 
+                   'benchmark_portfolio', 'trades', 'test_dates']:
+            if key in st.session_state:
+                del st.session_state[key]
+        
         try:
             progress_container = st.container()
             
@@ -787,7 +817,19 @@ def display_trading_strategy():
     
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.markdown("### Trading Strategy Configuration")
-    
+    st.markdown("""
+    <div class="info-box">
+        <strong>📊 Experimental Setup:</strong><br>
+        Implementation follows Sezer & Ozbayoglu (2018) benchmark methodology:
+        <ul>
+            <li>🏛️ Exact same data periods: 2007-2012 and 2012-2017</li>
+            <li>📈 Same stock universe: Dow 30 components</li>
+            <li>🖼️ 30x30 pixel bar chart images as CNN input</li>
+            <li>⚖️ Three-class prediction: Buy, Hold, Sell</li>
+            <li>⚠️ Results vary between runs due to stochastic training</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     
     with col1:
@@ -820,12 +862,12 @@ def display_trading_strategy():
     with col2:
         threshold_method = st.radio(
             "Signal Threshold Method",
-            options=["Fixed (Recommended)", "Dynamic"],
-            index=0,
-            help="Fixed thresholds performed better in your testing"
+            options=["Fixed", "Dynamic"],
+            index=0,  # Default to Fixed for simplicity
+            help="Fixed: Uses predetermined confidence thresholds for consistent signal generation. Dynamic: Adapts thresholds based on signal distribution - may provide better risk management but with higher variability."
         )
         
-        if threshold_method == "Fixed (Recommended)":
+        if threshold_method == "Fixed":
             signal_threshold = st.slider(
                 "Signal Threshold",
                 min_value=0.10,
@@ -856,6 +898,12 @@ def display_trading_strategy():
         st.write(f"- Above 50%: {np.sum(max_probs > 0.5) / len(max_probs):.1%}")
     
     if st.button("Execute Trading Strategy"):
+        # CLEAR ALL PREVIOUS STRATEGY RESULTS WHEN NEW STRATEGY IS EXECUTED
+        for key in ['strategy_results', 'benchmark_results', 'random_results', 'strategy_portfolio', 
+                   'benchmark_portfolio', 'trades', 'test_dates']:
+            if key in st.session_state:
+                del st.session_state[key]
+        
         with st.spinner("Executing trading strategy..."):
             
             data = st.session_state.data
@@ -880,25 +928,25 @@ def display_trading_strategy():
             prices = test_prices[:min_length]
             aligned_dates = test_dates[:min_length]
             
+            # Initialize strategy
             strategy = TradingStrategy(
                 initial_capital=initial_capital,
                 transaction_cost=transaction_cost,
                 max_position_size=max_position_size
             )
             
-            strategy_results = strategy.apply_strategy(
+            # Run CNN strategy with current parameters
+            strategy_results = strategy.apply_strategy_optimized(
                 prices, signals, aligned_dates,
-                fixed_threshold=signal_threshold
+                ticker=ticker,
+                test_period=prepared_data.get('test_period', '2007-2012'),
+                fixed_threshold=signal_threshold,
+                override_config={
+                    'threshold': signal_threshold if signal_threshold else None,
+                    'position_size': max_position_size,
+                    'method': 'fixed' if threshold_method == "Fixed (Recommended)" else 'dynamic'
+                }
             )
-            
-            strategy.reset()
-            benchmark_results = strategy.apply_buy_and_hold(prices)
-            
-            strategy.reset()
-            random_results = strategy.apply_random_strategy(prices)
-            
-            # Run CNN strategy
-            strategy_results = strategy.apply_strategy(prices, signals, aligned_dates)
             strategy_portfolio = strategy.get_portfolio_values().copy()  # Capture CNN strategy portfolio
             strategy_trades = strategy.get_trades().copy()  # Capture CNN strategy trades
 
@@ -912,7 +960,7 @@ def display_trading_strategy():
             random_results = strategy.apply_random_strategy(prices)
             random_portfolio = strategy.get_portfolio_values().copy()  # Capture random portfolio (if needed)
 
-            # Store all results in session state
+            # Store all FRESH results in session state
             st.session_state.strategy_results = strategy_results
             st.session_state.benchmark_results = benchmark_results
             st.session_state.random_results = random_results
@@ -920,6 +968,17 @@ def display_trading_strategy():
             st.session_state.benchmark_portfolio = benchmark_portfolio  # Buy-and-hold portfolio
             st.session_state.trades = strategy_trades  # CNN strategy trades
             st.session_state.test_dates = aligned_dates
+            
+            # Add a timestamp to track when strategy was executed
+            from datetime import datetime
+            st.session_state.strategy_executed_at = datetime.now().isoformat()
+            st.session_state.strategy_config = {
+                'threshold_method': threshold_method,
+                'signal_threshold': signal_threshold,
+                'initial_capital': initial_capital,
+                'transaction_cost': transaction_cost,
+                'max_position_size': max_position_size
+            }
             
             st.markdown("#### Strategy Performance")
             
@@ -953,6 +1012,16 @@ def display_trading_strategy():
             
             with col4:
                 st.metric("Win Rate", f"{strategy_results['win_rate']:.2%}")
+            
+            # Show which threshold method was used
+            threshold_display = f"{signal_threshold:.2f}" if signal_threshold is not None else "Dynamic"
+            st.info(f"""
+            **Strategy Configuration Used:**
+            - Threshold Method: {threshold_method}
+            - Threshold Value: {threshold_display}
+            - Initial Capital: £{initial_capital:,}
+            - Transaction Cost: {transaction_cost:.2%}
+            """)
             
             if strategy_results['total_return'] > benchmark_results['total_return']:
                 st.success(f"""
@@ -1001,16 +1070,50 @@ def display_trading_strategy():
             else:
                 st.info("No trades were executed (all signals were Hold)")
     
+    # Show current strategy configuration if results exist
+    if 'strategy_results' in st.session_state and 'strategy_config' in st.session_state:
+        st.markdown("#### Current Strategy Status")
+        config = st.session_state.strategy_config
+        executed_at = st.session_state.get('strategy_executed_at', 'Unknown')
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info(f"""
+            **Last Executed:** {executed_at[:19] if executed_at != 'Unknown' else 'Unknown'}
+            
+            **Configuration:**
+            - Method: {config['threshold_method']}
+            - Threshold: {config['signal_threshold'] if config['signal_threshold'] is not None else 'Dynamic'}
+            """)
+        
+        with col2:
+            st.info(f"""
+            **Parameters:**
+            - Capital: £{config['initial_capital']:,}
+            - Transaction Cost: {config['transaction_cost']:.2%}
+            - Max Position: {config['max_position_size']:.0%}
+            """)
+    
     st.markdown('</div>', unsafe_allow_html=True)
 
 def display_performance_analysis():
     """Display performance analysis page with corrected metrics."""
     st.markdown('<div class="sub-header">Performance Analysis</div>', unsafe_allow_html=True)
     
+    # Validate that we have current results
     if 'strategy_results' not in st.session_state or st.session_state.strategy_results is None:
         st.warning("Please execute a trading strategy first in the 'Trading Strategy' section.")
         return
     
+    if 'model' not in st.session_state or st.session_state.model is None:
+        st.warning("Please train a model first in the 'Model Training' section.")
+        return
+    
+    if 'prepared_data' not in st.session_state or st.session_state.prepared_data is None:
+        st.warning("Please prepare data first in the 'Data Preparation' section.")
+        return
+    
+    # Get current results - these should be fresh from the latest execution
     strategy_results = st.session_state.strategy_results
     benchmark_results = st.session_state.benchmark_results
     
@@ -1188,13 +1291,16 @@ def display_batch_experiment_page():
     st.markdown("### 📋 Benchmark Paper Comparison")
     if test_period == "2007-2012":
         st.info("""
-        **Sezer & Ozbayoglu (2018) Results for 2007-2012:**
+        **Sezer & Ozbayoglu (2018) Benchmark Results for 2007-2012:**
         - Average Classification Accuracy: 55.2%
         - CNN Strategy Return: 7.20%
         - Buy & Hold Return: 5.86%
         - Success Rate: 76.7% (23/30 stocks outperformed)
         - Stocks Tested: 29 Dow 30 stocks
-        """)
+
+        **Your Results Will Appear Here After Running the Experiment**
+        Results will vary from the benchmark due to implementation differences and neural network stochasticity.
+""")
     else:
         st.info("""
         **Sezer & Ozbayoglu (2018) Results for 2012-2017:**
@@ -1203,7 +1309,11 @@ def display_batch_experiment_page():
         - Buy & Hold Return: 13.25%
         - Success Rate: 44.8% (13/29 stocks outperformed)
         - Stocks Tested: 29 Dow 30 stocks
-        """)
+        
+        
+        **Your Results Will Appear Here After Running the Experiment**
+        Results will vary from the benchmark due to implementation differences and neural network stochasticity.
+""")
     
     if st.button("🚀 Run Comprehensive Benchmark Experiment"):
         if max_stocks < 10:
@@ -1354,7 +1464,11 @@ def run_batch_experiment_direct(test_period, selected_stocks, max_stocks, quick_
                 prices = test_prices[:min_len]
                 dates = test_dates[:min_len]
                 
-                strategy_results = strategy.apply_strategy(prices, signals, dates)
+                strategy_results = strategy.apply_strategy_optimized(
+                    prices, signals, dates,
+                    ticker=ticker,
+                    test_period=test_period
+                )
                 
                 strategy.reset()
                 benchmark_results = strategy.apply_buy_and_hold(prices)

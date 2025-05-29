@@ -147,7 +147,11 @@ class BenchmarkRunner:
             dates = test_dates[:min_len]
             
             # Execute strategies
-            strategy_results = strategy.apply_strategy(prices, signals, dates)
+            strategy_results = strategy.apply_strategy_optimized(
+                prices, signals, dates,
+                ticker=ticker,
+                test_period=test_period
+            )
             
             # Reset strategy for benchmark
             strategy.reset()

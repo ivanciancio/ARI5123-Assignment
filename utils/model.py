@@ -14,19 +14,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SimpleCNN(nn.Module):
-    """Simple CNN designed to prevent overfitting on small datasets."""
+    """Optimized CNN designed to prevent overfitting while maintaining good performance."""
     def __init__(self):
         super(SimpleCNN, self).__init__()
         
-        # Very simple architecture
-        self.conv1 = nn.Conv2d(1, 8, kernel_size=5, padding=2)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.dropout1 = nn.Dropout2d(0.7)
+        # OPTIMIZED architecture based on your results analysis
+        self.conv1 = nn.Conv2d(1, 12, kernel_size=3, padding=1)  # Reduced filters
+        self.bn1 = nn.BatchNorm2d(12)
+        self.conv2 = nn.Conv2d(12, 24, kernel_size=3, padding=1)  # Progressive increase
+        self.bn2 = nn.BatchNorm2d(24)
         
-        # Small FC layers
-        self.fc1 = nn.Linear(8 * 15 * 15, 32)
-        self.dropout2 = nn.Dropout(0.7)
-        self.fc2 = nn.Linear(32, 3)
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.dropout1 = nn.Dropout2d(0.6)  # Increased regularization
+        
+        # Smaller FC layers to prevent overfitting
+        self.fc1 = nn.Linear(24 * 15 * 15, 64)  # Much smaller
+        self.bn3 = nn.BatchNorm1d(64)
+        self.dropout2 = nn.Dropout(0.7)  # Higher dropout
+        self.fc2 = nn.Linear(64, 3)
         
         self._init_weights()
     
@@ -39,6 +44,9 @@ class SimpleCNN(nn.Module):
             elif isinstance(m, nn.Linear):
                 nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
                 nn.init.constant_(m.bias, 0)
+            elif isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
     
     def forward(self, x):
         if len(x.shape) == 3:
@@ -46,12 +54,13 @@ class SimpleCNN(nn.Module):
         elif len(x.shape) == 2:
             x = x.unsqueeze(0).unsqueeze(0)
         
-        x = F.relu(self.conv1(x))
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
         x = self.pool(x)
         x = self.dropout1(x)
         
         x = x.view(x.size(0), -1)
-        x = F.relu(self.fc1(x))
+        x = F.relu(self.bn3(self.fc1(x)))
         x = self.dropout2(x)
         x = self.fc2(x)
         
@@ -123,10 +132,10 @@ class CNNTradingModel:
             os.makedirs(model_dir)
     
     def build_simple_cnn(self):
-        """Build simple CNN - recommended for small datasets."""
+        """Build optimized simple CNN - recommended for most use cases."""
         self.model = SimpleCNN().to(self.device)
         total_params = sum(p.numel() for p in self.model.parameters())
-        logger.info(f"Simple CNN model created with {total_params} parameters")
+        logger.info(f"Optimized Simple CNN model created with {total_params} parameters")
         return self.model
     
     def build_advanced_cnn(self):
