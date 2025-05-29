@@ -5,7 +5,7 @@ Key improvements:
 1. Better label generation with shorter prediction horizon
 2. More balanced datasets
 3. Data augmentation to reduce overfitting
-4. Improved image normalization
+4. Improved image normalisation
 5. More conservative thresholds
 """
 
@@ -19,29 +19,29 @@ class FeatureEngineer:
     """Improved feature engineering for better model performance."""
     
     def __init__(self):
-        """Initialize the FeatureEngineer."""
+        """Initialise the FeatureEngineer."""
         pass
     
     def create_bar_chart_image_improved(self, price_data, window_size=30):
         """
-        Create improved 30x30 binary image with better normalization.
+        Create improved 30x30 binary image with better normalisation.
         
         Improvements:
-        - Better price normalization
-        - Add small amount of noise to prevent exact memorization
+        - Better price normalisation
+        - Add small amount of noise to prevent exact memorisation
         - More robust to extreme values
         """
         # Create empty image
         img = np.zeros((30, 30), dtype=np.float32)
         
-        # Robust normalization using percentiles instead of min/max
+        # Robust normalisation using percentiles instead of min/max
         p5 = np.percentile(price_data, 5)
         p95 = np.percentile(price_data, 95)
         price_range = p95 - p5
         
         if price_range > 0:
             for i in range(min(window_size, len(price_data))):
-                # Clip extreme values and normalize
+                # Clip extreme values and normalise
                 clipped_price = np.clip(price_data[i], p5, p95)
                 normalised_price = int(29 * (clipped_price - p5) / price_range)
                 normalised_price = np.clip(normalised_price, 0, 29)
@@ -49,8 +49,8 @@ class FeatureEngineer:
                 # Draw bar (1 represents the bar, 0 is background)
                 img[29-normalised_price:30, i] = 1.0
         
-        # Add very small amount of noise to prevent exact memorization
-        # This helps with generalization
+        # Add very small amount of noise to prevent exact memorisation
+        # This helps with generalisation
         noise = np.random.normal(0, 0.01, img.shape)
         img = np.clip(img + noise, 0, 1)
         
@@ -59,7 +59,7 @@ class FeatureEngineer:
     def generate_improved_labels(self, data, ticker, window_size=30, 
                             prediction_horizon=3, train_data=None):  # CHANGED: 5 to 3 days
         """
-        Generate labels with OPTIMIZED methodology for better accuracy.
+        Generate labels with OPTIMISED methodology for better accuracy.
         
         Key improvements:
         - Shorter prediction horizon (3 vs 5 days)
@@ -73,18 +73,18 @@ class FeatureEngineer:
         returns = pd.Series(close_prices).pct_change().dropna()
         volatility = returns.std()
         
-        # OPTIMIZED: More conservative adaptive thresholds
+        # OPTIMISED: More conservative adaptive thresholds
         if train_data is not None:
             train_prices = train_data['Close'].values
             train_returns = pd.Series(train_prices).pct_change().dropna()
             reference_vol = train_returns.std()
             
-            # OPTIMIZED: Reduced from 0.5 to 0.3 for better accuracy
+            # OPTIMISED: Reduced from 0.5 to 0.3 for better accuracy
             base_threshold = reference_vol * 0.3  # More conservative
             threshold_high = base_threshold
             threshold_low = -base_threshold
             
-            logger.info(f"OPTIMIZED thresholds for {ticker}:")
+            logger.info(f"OPTIMISED thresholds for {ticker}:")
             logger.info(f"  Volatility: {reference_vol:.4f}")
             logger.info(f"  High threshold: {threshold_high:.4f}")
             logger.info(f"  Low threshold: {threshold_low:.4f}")
@@ -92,7 +92,7 @@ class FeatureEngineer:
             # Fallback to fixed thresholds
             threshold_high = volatility * 0.3  # Reduced from 0.5
             threshold_low = -volatility * 0.3
-            logger.warning(f"Using fallback OPTIMIZED thresholds for {ticker}")
+            logger.warning(f"Using fallback OPTIMISED thresholds for {ticker}")
         
         # Generate labels with shorter horizon
         labels = []
@@ -121,7 +121,7 @@ class FeatureEngineer:
         
         # Log label distribution
         unique_labels, counts = np.unique(labels_array, return_counts=True)
-        logger.info(f"OPTIMIZED label distribution for {ticker}:")
+        logger.info(f"OPTIMISED label distribution for {ticker}:")
         for label, count in zip(unique_labels, counts):
             class_name = ['Hold', 'Buy', 'Sell'][int(label)]
             percentage = count / len(labels_array) * 100
@@ -231,7 +231,7 @@ class FeatureEngineer:
                                         window_size=30, prediction_horizon=3,  # CHANGED: 5 to 3
                                         balance_method='hybrid'):
         """
-        Prepare features with ALL OPTIMIZATIONS applied.
+        Prepare features with ALL OPTIMISATIONS applied.
         
         Key improvements:
         - Shorter prediction horizon (3 vs 5 days) 
@@ -239,9 +239,9 @@ class FeatureEngineer:
         - Dataset balancing
         - More robust validation split
         """
-        logger.info(f"Preparing OPTIMIZED benchmark features for {ticker}")
+        logger.info(f"Preparing OPTIMISED benchmark features for {ticker}")
         
-        # Process training data with OPTIMIZED method
+        # Process training data with OPTIMISED method
         train_images = []
         train_close_prices = train_data['Close'].values
         
@@ -255,7 +255,7 @@ class FeatureEngineer:
             img = self.create_bar_chart_image_improved(price_window, window_size)
             train_images.append(img)
         
-        # Generate OPTIMIZED labels (3-day horizon)
+        # Generate OPTIMISED labels (3-day horizon)
         train_labels = self.generate_improved_labels(
             train_data, ticker, window_size, prediction_horizon, train_data
         )
@@ -269,7 +269,7 @@ class FeatureEngineer:
             img = self.create_bar_chart_image_improved(price_window, window_size)
             test_images.append(img)
         
-        # Generate test labels using same OPTIMIZED thresholds as training
+        # Generate test labels using same OPTIMISED thresholds as training
         test_labels = self.generate_improved_labels(
             test_data, ticker, window_size, prediction_horizon, train_data
         )
@@ -316,11 +316,11 @@ class FeatureEngineer:
         X_train_final = X_train_balanced[:val_split]
         y_train_final = y_train_balanced[:val_split]
         
-        logger.info(f"OPTIMIZED features prepared for {ticker}:")
+        logger.info(f"OPTIMISED features prepared for {ticker}:")
         logger.info(f"  Training: {len(X_train_final)} samples (balanced)")
         logger.info(f"  Validation: {len(X_val)} samples")
         logger.info(f"  Testing: {len(X_test)} samples")
-        logger.info(f"  Prediction horizon: {prediction_horizon} days (OPTIMIZED from 5)")
+        logger.info(f"  Prediction horizon: {prediction_horizon} days (OPTIMISED from 5)")
         
         return {
             'X_train': X_train_final,
@@ -335,11 +335,11 @@ class FeatureEngineer:
             'train_dates': train_data.index[window_size:-prediction_horizon],
             'test_dates': test_data.index[window_size:-prediction_horizon],
             'improvements_applied': [
-                f'OPTIMIZED prediction horizon: {prediction_horizon} days',
+                f'OPTIMISED prediction horizon: {prediction_horizon} days',
                 f'Dataset balancing: {balance_method}',
                 'Improved image normalization',
                 'Noise injection for generalization',
-                'OPTIMIZED volatility-adjusted thresholds (0.3 vs 0.5)'
+                'OPTIMISED volatility-adjusted thresholds (0.3 vs 0.5)'
             ]
         }
     

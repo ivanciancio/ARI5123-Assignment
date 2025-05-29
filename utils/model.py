@@ -14,18 +14,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SimpleCNN(nn.Module):
-    """Optimized CNN designed to prevent overfitting while maintaining good performance."""
+    """Optimised CNN designed to prevent overfitting while maintaining good performance."""
     def __init__(self):
         super(SimpleCNN, self).__init__()
         
-        # OPTIMIZED architecture based on your results analysis
+        # OPTIMISED architecture based on your results analysis
         self.conv1 = nn.Conv2d(1, 12, kernel_size=3, padding=1)  # Reduced filters
         self.bn1 = nn.BatchNorm2d(12)
         self.conv2 = nn.Conv2d(12, 24, kernel_size=3, padding=1)  # Progressive increase
         self.bn2 = nn.BatchNorm2d(24)
         
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.dropout1 = nn.Dropout2d(0.6)  # Increased regularization
+        self.dropout1 = nn.Dropout2d(0.6)  # Increased regularisation
         
         # Smaller FC layers to prevent overfitting
         self.fc1 = nn.Linear(24 * 15 * 15, 64)  # Much smaller
@@ -132,10 +132,10 @@ class CNNTradingModel:
             os.makedirs(model_dir)
     
     def build_simple_cnn(self):
-        """Build optimized simple CNN - recommended for most use cases."""
+        """Build optimised simple CNN - recommended for most use cases."""
         self.model = SimpleCNN().to(self.device)
         total_params = sum(p.numel() for p in self.model.parameters())
-        logger.info(f"Optimized Simple CNN model created with {total_params} parameters")
+        logger.info(f"Optimised Simple CNN model created with {total_params} parameters")
         return self.model
     
     def build_advanced_cnn(self):
@@ -190,7 +190,7 @@ class CNNTradingModel:
             val_dataset, batch_size=batch_size, shuffle=False
         )
         
-        # Optimizer and scheduler
+        # Optimiser and scheduler
         optimizer = torch.optim.Adam(
             self.model.parameters(), 
             lr=learning_rate, 

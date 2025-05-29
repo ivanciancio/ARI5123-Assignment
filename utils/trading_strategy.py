@@ -21,7 +21,7 @@ class TradingStrategy:
     
     def __init__(self, initial_capital=10000.0, transaction_cost=0.001, max_position_size=0.95):
         """
-        Initialize trading strategy with conservative defaults.
+        Initialise trading strategy with conservative defaults.
         
         Args:
             initial_capital: Initial capital for the portfolio
@@ -35,7 +35,7 @@ class TradingStrategy:
     
     def get_stock_specific_config(self, ticker, test_period):
         """
-        Get OPTIMIZED configuration for specific stocks based on performance analysis.
+        Get OPTIMISED configuration for specific stocks based on performance analysis.
         """
         # High-performing stocks for 2007-2012
         winners_2007_2012 = ['HD', 'GE', 'DIS', 'MCD', 'CAT', 'CSCO', 'INTC']
@@ -100,7 +100,7 @@ class TradingStrategy:
     def apply_strategy_optimized(self, prices, signals, dates=None, ticker=None, test_period=None, 
                             fixed_threshold=None, override_config=None):
         """
-        Apply OPTIMIZED trading strategy with adaptive thresholds and smart position sizing.
+        Apply OPTIMISED trading strategy with adaptive thresholds and smart position sizing.
         """
         if len(prices) != len(signals):
             raise ValueError("Prices and signals must have the same length")
@@ -112,14 +112,14 @@ class TradingStrategy:
         
         self.portfolio_values.append(self.capital)
         
-        # Get OPTIMIZED configuration for this stock and period
+        # Get OPTIMISED configuration for this stock and period
         if ticker and test_period and not override_config:
             config = self.get_stock_specific_config(ticker, test_period)
             optimized_threshold = config['threshold']
             optimized_position_size = config['position_size']
             preferred_method = config['method']
             
-            logger.info(f"OPTIMIZED config for {ticker} ({test_period}):")
+            logger.info(f"OPTIMISED config for {ticker} ({test_period}):")
             logger.info(f"  Position Size: {optimized_position_size:.0%}")
             logger.info(f"  Threshold: {optimized_threshold}")
             logger.info(f"  Method: {preferred_method}")
@@ -134,11 +134,11 @@ class TradingStrategy:
                 preferred_method = override_config.get('method', 'dynamic')
             else:
                 # FIX: Ensure threshold is never None
-                optimized_threshold = fixed_threshold or 0.20  # This was the problem
+                optimized_threshold = fixed_threshold or 0.20  
                 optimized_position_size = self.max_position_size
                 preferred_method = 'dynamic' if fixed_threshold is None else 'fixed'
         
-        # ADDED: Safety check to ensure optimized_threshold is never None
+        # ADDED: Safety check to ensure optimised_threshold is never None
         if optimized_threshold is None:
             optimized_threshold = 0.20
             logger.warning(f"Threshold was None, defaulting to 0.20")
@@ -164,19 +164,19 @@ class TradingStrategy:
         # Use OPTIMIZED threshold method
         if preferred_method == 'fixed' or fixed_threshold is not None:
             confidence_threshold = final_threshold
-            logger.info(f"Using OPTIMIZED FIXED threshold: {confidence_threshold:.3f}")
+            logger.info(f"Using OPTIMISED FIXED threshold: {confidence_threshold:.3f}")
         else:
             # Dynamic method with optimization
             if is_multiclass:
                 max_probs = np.max(signals, axis=1)
-                # Use optimized percentile based on stock performance
+                # Use optimised percentile based on stock performance
                 if ticker in ['HD', 'GE', 'DIS', 'MCD', 'CSCO']:
                     percentile = 50  # More aggressive for winners
                 else:
                     percentile = 70  # More conservative for others
                 confidence_threshold = np.percentile(max_probs, percentile)
                 confidence_threshold = max(confidence_threshold, final_threshold)  # Ensure minimum
-                logger.info(f"Using OPTIMIZED DYNAMIC threshold: {confidence_threshold:.3f} (percentile: {percentile})")
+                logger.info(f"Using OPTIMISED DYNAMIC threshold: {confidence_threshold:.3f} (percentile: {percentile})")
             else:
                 confidence_threshold = final_threshold
         
@@ -193,7 +193,7 @@ class TradingStrategy:
                 sell_prob = probs[2]  # Sell probability
                 hold_prob = probs[0]  # Hold probability
                 
-                # OPTIMIZED signal logic with better separation
+                # OPTIMISED signal logic with better separation
                 if (buy_prob >= confidence_threshold and 
                     buy_prob > sell_prob + 0.08 and  # Reduced from 0.1 for more trades
                     buy_prob > hold_prob):
@@ -209,7 +209,7 @@ class TradingStrategy:
                 signal_value = signals[i-1] if not hasattr(signals[i-1], '__len__') else signals[i-1][0]
                 signal_class = 1 if signal_value >= confidence_threshold else 0
             
-            # Execute trades with OPTIMIZED position sizing
+            # Execute trades with OPTIMISED position sizing
             if signal_class == 1 and self.position == 0:
                 # BUY - Use stock-specific position sizing
                 amount_to_invest = self.capital * optimized_position_size
@@ -239,7 +239,7 @@ class TradingStrategy:
                     trades_executed += 1
                     
                     if trades_executed <= 5:  # Log first few trades
-                        logger.info(f"OPTIMIZED BUY at {prices[i]:.2f}, Shares: {shares:.2f}, Size: {optimized_position_size:.0%}")
+                        logger.info(f"OPTIMISED BUY at {prices[i]:.2f}, Shares: {shares:.2f}, Size: {optimized_position_size:.0%}")
                 
             elif signal_class == 2 and self.position > 0:
                 # SELL
@@ -270,7 +270,7 @@ class TradingStrategy:
                 trades_executed += 1
                 
                 if trades_executed <= 5:  # Log first few trades
-                    logger.info(f"OPTIMIZED SELL at {prices[i]:.2f}, PnL: {pnl:.2f}")
+                    logger.info(f"OPTIMISED SELL at {prices[i]:.2f}, PnL: {pnl:.2f}")
             
             # Calculate portfolio value CORRECTLY
             portfolio_value = self.capital
@@ -309,7 +309,7 @@ class TradingStrategy:
             self.portfolio_values[-1] = self.capital
             self.position = 0
         
-        logger.info(f"OPTIMIZED strategy executed: Buy={buy_signals}, Sell={sell_signals}, Total trades={trades_executed}")
+        logger.info(f"OPTIMISED strategy executed: Buy={buy_signals}, Sell={sell_signals}, Total trades={trades_executed}")
         logger.info(f"Final portfolio value: {self.portfolio_values[-1]:.2f}")
         logger.info(f"Configuration used: Threshold={confidence_threshold:.3f}, Position={optimized_position_size:.0%}")
         
@@ -496,11 +496,11 @@ class TradingStrategy:
         else:
             total_return = 0.0
         
-        # FIXED: Calculate annualized return correctly
+        # FIXED: Calculate annualised return correctly
         n_days = len(returns) if len(returns) > 0 else 1
         years = n_days / 252.0  # Trading days per year
         
-        # Correct annualized return formula
+        # Correct annualised return formula
         if total_return > -1 and years > 0:
             annualised_return = ((1 + total_return) ** (1/years)) - 1
         else:

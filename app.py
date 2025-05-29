@@ -460,11 +460,11 @@ def display_data_preparation():
                     if extra_info and "delay" in extra_info:
                         rate_limit_info.info(f"🕐 Next delay: {extra_info['delay']:.1f}s")
                 
-                # Initialize data loader and download
+                # Initialise data loader and download
                 data_loader = DataLoader()
                 
                 try:
-                    with st.spinner("Initializing download..."):
+                    with st.spinner("Initialising download..."):
                         data = data_loader.download_benchmark_data(
                             force_download=force_download,
                             progress_callback=detailed_progress_callback
@@ -745,7 +745,7 @@ def display_model_training():
                 
                 Anti-overfitting measures:
                 - Dropout: 0.5, 0.7
-                - Batch Normalization: Yes
+                - Batch Normalisation: Yes
                 - Weight Decay: {weight_decay}
                 - Early Stopping: {use_early_stopping}
                 """)
@@ -853,7 +853,7 @@ def display_model_training():
                 """)
             else:
                 st.success(f"""
-                🟢 **Good Generalization**
+                🟢 **Good Generalisation**
                 - Training Accuracy: {final_train_acc:.2%}
                 - Validation Accuracy: {final_val_acc:.2%}
                 - Gap: {overfitting_gap:.1%}
@@ -1024,7 +1024,7 @@ Neural network training is inherently stochastic, resulting in:
             prices = test_prices[:min_length]
             aligned_dates = test_dates[:min_length]
             
-            # Initialize strategy
+            # Initialise strategy
             strategy = TradingStrategy(
                 initial_capital=initial_capital,
                 transaction_cost=transaction_cost,
@@ -1142,7 +1142,7 @@ Neural network training is inherently stochastic, resulting in:
 **Possible improvements:**
 {threshold_suggestion}
 - Increase training epochs
-- Add more regularization
+- Add more regularisation
                 """)
             
             st.markdown("#### Portfolio Performance")

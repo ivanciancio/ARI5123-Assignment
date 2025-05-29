@@ -89,7 +89,7 @@ class BenchmarkRunner:
         logger.info(f"Starting experiment for {ticker} ({test_period})")
         
         try:
-            # Initialize components
+            # Initialise components
             data_loader = DataLoader()
             feature_engineer = FeatureEngineer()
             
@@ -399,7 +399,7 @@ def main():
     
     args = parser.parse_args()
     
-    # Initialize benchmark runner
+    # Initialise benchmark runner
     runner = BenchmarkRunner(output_dir=args.output_dir)
     
     # Run experiments
