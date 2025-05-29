@@ -74,35 +74,110 @@ st.markdown("""
         margin-top: 2rem;
         margin-bottom: 1rem;
     }
+    
+    /* Updated section styling for dark mode compatibility */
     .section {
-        background-color: #F8FAFC;
+        background-color: var(--background-color, #F8FAFC);
         padding: 1.5rem;
         border-radius: 0.5rem;
         margin-bottom: 2rem;
-        border: 1px solid #E2E8F0;
+        border: 1px solid var(--border-color, #E2E8F0);
+        color: var(--text-color, #1a202c);
     }
+    
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+        .section {
+            background-color: #2D3748 !important;
+            border-color: #4A5568 !important;
+            color: #E2E8F0 !important;
+        }
+        .main-header {
+            color: #63B3ED !important;
+        }
+        .sub-header {
+            color: #90CDF4 !important;
+        }
+        .info-box {
+            background-color: #1A365D !important;
+            border-left-color: #63B3ED !important;
+            color: #E2E8F0 !important;
+        }
+        .metric-card {
+            background-color: #2D3748 !important;
+            color: #E2E8F0 !important;
+        }
+        .metric-value {
+            color: #90CDF4 !important;
+        }
+    }
+    
+    /* Force text visibility in all modes */
+    .stMarkdown, .stMarkdown p, .stMarkdown div {
+        color: inherit !important;
+    }
+    
     .info-box {
-        background-color: #EFF6FF;
+        background-color: var(--info-bg, #EFF6FF);
         padding: 1rem;
         border-radius: 0.5rem;
-        border-left: 4px solid #3B82F6;
+        border-left: 4px solid var(--info-border, #3B82F6);
         margin-bottom: 1rem;
+        color: var(--info-text, #1a202c);
     }
     .metric-card {
-        background-color: #FFFFFF;
+        background-color: var(--card-bg, #FFFFFF);
         padding: 1rem;
         border-radius: 0.5rem;
         box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
         text-align: center;
+        color: var(--card-text, #1a202c);
     }
     .metric-value {
         font-size: 1.8rem;
         font-weight: 700;
-        color: #2563EB;
+        color: var(--metric-color, #2563EB);
     }
     .metric-label {
         font-size: 0.9rem;
-        color: #64748B;
+        color: var(--label-color, #64748B);
+    }
+    
+    /* Streamlit-specific dark mode overrides */
+    [data-theme="dark"] .section {
+        background-color: #2D3748 !important;
+        border-color: #4A5568 !important;
+        color: #E2E8F0 !important;
+    }
+    
+    [data-theme="dark"] .info-box {
+        background-color: #1A365D !important;
+        border-left-color: #63B3ED !important;
+        color: #E2E8F0 !important;
+    }
+    
+    [data-theme="dark"] .metric-card {
+        background-color: #2D3748 !important;
+        border: 1px solid #4A5568 !important;
+        color: #E2E8F0 !important;
+    }
+    
+    [data-theme="dark"] .metric-value {
+        color: #90CDF4 !important;
+    }
+    
+    [data-theme="dark"] .metric-label {
+        color: #A0AEC0 !important;
+    }
+    
+    /* Additional Streamlit component overrides for dark mode */
+    [data-theme="dark"] .stMarkdown h1,
+    [data-theme="dark"] .stMarkdown h2,
+    [data-theme="dark"] .stMarkdown h3,
+    [data-theme="dark"] .stMarkdown h4,
+    [data-theme="dark"] .stMarkdown p,
+    [data-theme="dark"] .stMarkdown div {
+        color: #E2E8F0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -801,7 +876,7 @@ def display_model_training():
     st.markdown('</div>', unsafe_allow_html=True)
 
 def display_trading_strategy():
-    """Display trading strategy page with optimised defaults."""
+    """Display trading strategy page with dark mode compatibility."""
     st.markdown('<div class="sub-header">Trading Strategy</div>', unsafe_allow_html=True)
     
     if 'model' not in st.session_state or st.session_state.model is None:
@@ -815,87 +890,108 @@ def display_trading_strategy():
     prepared_data = st.session_state.prepared_data
     predictions = st.session_state.predictions
     
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.markdown("### Trading Strategy Configuration")
-    st.markdown("""
-    <div class="info-box">
-        <strong>📊 Experimental Setup:</strong><br>
-        Implementation follows Sezer & Ozbayoglu (2018) benchmark methodology:
-        <ul>
-            <li>🏛️ Exact same data periods: 2007-2012 and 2012-2017</li>
-            <li>📈 Same stock universe: Dow 30 components</li>
-            <li>🖼️ 30x30 pixel bar chart images as CNN input</li>
-            <li>⚖️ Three-class prediction: Buy, Hold, Sell</li>
-            <li>⚠️ Results vary between runs due to stochastic training</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        initial_capital = st.number_input(
-            "Initial Capital (£)",
-            min_value=1000,
-            max_value=1000000,
-            value=10000,
-            step=1000
-        )
+    # FIXED: Use Streamlit container instead of custom HTML section
+    with st.container():
+        st.markdown("### Trading Strategy Configuration")
         
-        transaction_cost = st.slider(
-            "Transaction Cost (%)",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.1,
-            step=0.05,
-            format="%.2f"
-        ) / 100
+        # FIXED: Use st.info() instead of custom HTML for better dark mode support
+        st.info("""
+**📊 Experimental Setup:**
+
+Implementation follows Sezer & Ozbayoglu (2018) benchmark methodology:
+
+🏛️ **Exact same data periods:** 2007-2012 and 2012-2017  
+📈 **Same stock universe:** Dow 30 components  
+🖼️ **30x30 pixel bar chart images** as CNN input  
+⚖️ **Three-class prediction:** Buy, Hold, Sell  
+⚠️ **Results vary between runs** due to stochastic training
+        """)
         
-        max_position_size = st.slider(
-            "Max Position Size (%)",
-            min_value=50,
-            max_value=100,
-            value=95,
-            step=5,
-            help="Maximum percentage of capital to invest in a single position"
-        ) / 100
-    
-    with col2:
-        threshold_method = st.radio(
-            "Signal Threshold Method",
-            options=["Fixed", "Dynamic"],
-            index=0,  # Default to Fixed for simplicity
-            help="Fixed: Uses predetermined confidence thresholds for consistent signal generation. Dynamic: Adapts thresholds based on signal distribution - may provide better risk management but with higher variability."
-        )
+        col1, col2 = st.columns(2)
         
-        if threshold_method == "Fixed":
-            signal_threshold = st.slider(
-                "Signal Threshold",
-                min_value=0.10,
-                max_value=0.30,
-                value=0.15,
-                step=0.02,
-                help="Lower values = more trades, higher values = fewer trades. Your model needs lower thresholds due to low confidence."
+        with col1:
+            initial_capital = st.number_input(
+                "Initial Capital (£)",
+                min_value=1000,
+                max_value=1000000,
+                value=10000,
+                step=1000
             )
-        else:
-            st.info("Using dynamic thresholds based on signal distribution")
-            signal_threshold = None
+            
+            transaction_cost = st.slider(
+                "Transaction Cost (%)",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.1,
+                step=0.05,
+                format="%.2f"
+            ) / 100
+            
+            max_position_size = st.slider(
+                "Max Position Size (%)",
+                min_value=50,
+                max_value=100,
+                value=95,
+                step=5,
+                help="Maximum percentage of capital to invest in a single position"
+            ) / 100
         
-        position_sizing = st.selectbox(
-            "Position Sizing Method",
-            options=["Fixed Percentage", "Kelly Criterion (Advanced)"],
-            index=0,
-            help="Fixed percentage is more conservative"
-        )
+        with col2:
+            threshold_method = st.radio(
+                "Signal Threshold Method",
+                options=["Fixed", "Dynamic"],
+                index=0,  # Default to Fixed for simplicity
+                help="Fixed: Uses predetermined confidence thresholds for consistent signal generation. Dynamic: Adapts thresholds based on signal distribution - may provide better risk management but with higher variability."
+            )
+            
+            if threshold_method == "Fixed":
+                signal_threshold = st.slider(
+                    "Signal Threshold",
+                    min_value=0.10,
+                    max_value=0.30,
+                    value=0.15,
+                    step=0.02,
+                    help="Lower values = more trades, higher values = fewer trades. Your model needs lower thresholds due to low confidence."
+                )
+            else:
+                st.info("Using dynamic thresholds based on signal distribution")
+                signal_threshold = None
+            
+            position_sizing = st.selectbox(
+                "Position Sizing Method",
+                options=["Fixed Percentage", "Kelly Criterion (Advanced)"],
+                index=0,
+                help="Fixed percentage is more conservative"
+            )
     
-    # Show prediction analysis
+    # Show prediction analysis with better dark mode support
     st.markdown("#### 🔍 Prediction Analysis")
     if len(predictions.shape) > 1:
         max_probs = np.max(predictions, axis=1)
-        st.write(f"**Prediction Confidence:**")
-        st.write(f"- Average: {np.mean(max_probs):.1%}")
-        st.write(f"- Range: {np.min(max_probs):.1%} to {np.max(max_probs):.1%}")
-        st.write(f"- Above 80%: {np.sum(max_probs > 0.8) / len(max_probs):.1%}")
-        st.write(f"- Above 50%: {np.sum(max_probs > 0.5) / len(max_probs):.1%}")
+        
+        # Use metrics layout for better visibility in all modes
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Average Confidence", f"{np.mean(max_probs):.1%}")
+        with col2:
+            st.metric("Confidence Range", f"{np.min(max_probs):.1%} - {np.max(max_probs):.1%}")
+        with col3:
+            st.metric("Above 80%", f"{np.sum(max_probs > 0.8) / len(max_probs):.1%}")
+        with col4:
+            st.metric("Above 50%", f"{np.sum(max_probs > 0.5) / len(max_probs):.1%}")
+    
+    # FIXED: Use st.warning() instead of custom HTML
+    st.warning("""
+⚠️ **RESULT VARIABILITY NOTICE**
+
+Neural network training is inherently stochastic, resulting in:
+- **Different results each training run** due to random weight initialisation
+- **Performance variation** across different CNN architectures and signal methods
+- **Market regime sensitivity** - performance varies between volatile and bull market periods
+- **Classification accuracy** typically ranges 35-40% (better than random 33%)
+
+**Recommendation:** Run multiple experiments to assess typical performance range rather than relying on single results.
+    """)
     
     if st.button("Execute Trading Strategy"):
         # CLEAR ALL PREVIOUS STRATEGY RESULTS WHEN NEW STRATEGY IS EXECUTED
@@ -944,7 +1040,7 @@ def display_trading_strategy():
                 override_config={
                     'threshold': signal_threshold if signal_threshold else None,
                     'position_size': max_position_size,
-                    'method': 'fixed' if threshold_method == "Fixed (Recommended)" else 'dynamic'
+                    'method': 'fixed' if threshold_method == "Fixed" else 'dynamic'
                 }
             )
             strategy_portfolio = strategy.get_portfolio_values().copy()  # Capture CNN strategy portfolio
@@ -1016,19 +1112,19 @@ def display_trading_strategy():
             # Show which threshold method was used
             threshold_display = f"{signal_threshold:.2f}" if signal_threshold is not None else "Dynamic"
             st.info(f"""
-            **Strategy Configuration Used:**
-            - Threshold Method: {threshold_method}
-            - Threshold Value: {threshold_display}
-            - Initial Capital: £{initial_capital:,}
-            - Transaction Cost: {transaction_cost:.2%}
+**Strategy Configuration Used:**
+- Threshold Method: {threshold_method}
+- Threshold Value: {threshold_display}
+- Initial Capital: £{initial_capital:,}
+- Transaction Cost: {transaction_cost:.2%}
             """)
             
             if strategy_results['total_return'] > benchmark_results['total_return']:
                 st.success(f"""
-                🎉 **Strategy Outperformed!**
-                - CNN Strategy: {strategy_results['total_return']:.2%}
-                - Buy & Hold: {benchmark_results['total_return']:.2%}
-                - Outperformance: {perf_delta:.2%}
+🎉 **Strategy Outperformed!**
+- CNN Strategy: {strategy_results['total_return']:.2%}
+- Buy & Hold: {benchmark_results['total_return']:.2%}
+- Outperformance: {perf_delta:.2%}
                 """)
             else:
                 if signal_threshold is not None:
@@ -1038,15 +1134,15 @@ def display_trading_strategy():
                     threshold_suggestion = "- Try fixed threshold of 0.15-0.20"
 
                 st.warning(f"""
-                📊 **Strategy Underperformed**
-                - CNN Strategy: {strategy_results['total_return']:.2%}
-                - Buy & Hold: {benchmark_results['total_return']:.2%}
-                - Underperformance: {perf_delta:.2%}
+📊 **Strategy Underperformed**
+- CNN Strategy: {strategy_results['total_return']:.2%}
+- Buy & Hold: {benchmark_results['total_return']:.2%}
+- Underperformance: {perf_delta:.2%}
 
-                **Possible improvements:**
-                {threshold_suggestion}
-                - Increase training epochs
-                - Add more regularization
+**Possible improvements:**
+{threshold_suggestion}
+- Increase training epochs
+- Add more regularization
                 """)
             
             st.markdown("#### Portfolio Performance")
@@ -1079,22 +1175,20 @@ def display_trading_strategy():
         col1, col2 = st.columns(2)
         with col1:
             st.info(f"""
-            **Last Executed:** {executed_at[:19] if executed_at != 'Unknown' else 'Unknown'}
-            
-            **Configuration:**
-            - Method: {config['threshold_method']}
-            - Threshold: {config['signal_threshold'] if config['signal_threshold'] is not None else 'Dynamic'}
+**Last Executed:** {executed_at[:19] if executed_at != 'Unknown' else 'Unknown'}
+
+**Configuration:**
+- Method: {config['threshold_method']}
+- Threshold: {config['signal_threshold'] if config['signal_threshold'] is not None else 'Dynamic'}
             """)
         
         with col2:
             st.info(f"""
-            **Parameters:**
-            - Capital: £{config['initial_capital']:,}
-            - Transaction Cost: {config['transaction_cost']:.2%}
-            - Max Position: {config['max_position_size']:.0%}
+**Parameters:**
+- Capital: £{config['initial_capital']:,}
+- Transaction Cost: {config['transaction_cost']:.2%}
+- Max Position: {config['max_position_size']:.0%}
             """)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
 
 def display_performance_analysis():
     """Display performance analysis page with corrected metrics."""
