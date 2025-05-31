@@ -7,7 +7,6 @@ It can be run independently from the command line.
 
 import os
 import sys
-import json
 import pandas as pd
 import numpy as np
 import logging
@@ -337,24 +336,13 @@ class BenchmarkRunner:
     
     def save_batch_results(self, batch_results, test_period):
         """
-        Save batch experiment results to files.
+        Save batch experiment results to CSV file.
         
         Args:
             batch_results: Batch experiment results
             test_period: Test period used
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        # Save complete results as JSON
-        results_file = os.path.join(
-            self.output_dir, 
-            f"benchmark_results_{test_period}_{timestamp}.json"
-        )
-        
-        with open(results_file, 'w') as f:
-            json.dump(batch_results, f, indent=2, default=str)
-        
-        logger.info(f"Saved complete results to: {results_file}")
         
         # Save summary as CSV
         if batch_results['individual_results']:
@@ -378,10 +366,10 @@ class BenchmarkRunner:
                 summary_df = pd.DataFrame(summary_data)
                 summary_file = os.path.join(
                     self.output_dir,
-                    f"benchmark_summary_{test_period}_{timestamp}.csv"
+                    f"benchmark_results_{test_period}_{timestamp}.csv"
                 )
                 summary_df.to_csv(summary_file, index=False)
-                logger.info(f"Saved summary to: {summary_file}")
+                logger.info(f"Saved results to: {summary_file}")
 
 def main():
     """Main function for running benchmark experiments from command line."""

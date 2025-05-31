@@ -245,7 +245,7 @@ def create_improved_architecture_diagram():
     components = [
         {
             'name': 'Historical\nStock Data',
-            'desc': 'OHLCV data from\nYahoo Finance',
+            'desc': 'OHLCV data from\nEODHD',
             'symbol': 'D',
             'color': '#4f46e5'
         },

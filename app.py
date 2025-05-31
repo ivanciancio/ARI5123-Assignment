@@ -22,6 +22,9 @@ import torch
 from torchinfo import summary as torch_summary
 from sklearn.metrics import confusion_matrix, roc_curve, auc
 import seaborn as sns
+import os
+import json
+from datetime import datetime
 
 # Set page configuration - THIS MUST BE THE FIRST STREAMLIT COMMAND
 st.set_page_config(
@@ -319,6 +322,24 @@ def display_data_preparation():
     """Display data preparation page with benchmark data download and visualisation."""
     st.markdown('<div class="sub-header">Data Preparation</div>', unsafe_allow_html=True)
     
+    # Check if EODHD is configured
+    eodhd_configured = False
+    try:
+        from utils.eodhdapi import get_client
+        client = get_client()
+        eodhd_configured = True
+        st.success("✅ EODHD API configured successfully")
+    except Exception as e:
+        st.error(f"❌ EODHD API Error: {str(e)}")
+        st.info("""
+        To use this application, you need an EODHD API key:
+        1. Sign up at https://eodhd.com
+        2. Get your API key from the dashboard
+        3. Add it to Streamlit secrets as EODHD_API_KEY
+        """)
+        st.stop()
+        return
+    
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.markdown("### Download Benchmark Data")
     
@@ -328,6 +349,7 @@ def display_data_preparation():
         - Full dataset: January 1997 to December 2017
         - Test Period 1: 2007-2012 (includes financial crisis)
         - Test Period 2: 2012-2017 (bull market period)
+        - Data Source: EODHD Historical Data API
     </div>
     """, unsafe_allow_html=True)
     
@@ -384,7 +406,7 @@ def display_data_preparation():
             progress_container = st.container()
             
             with progress_container:
-                st.markdown("### 📊 Download Progress")
+                st.markdown("### 📊 Download Progress (Using EODHD API)")
                 overall_progress = st.progress(0)
                 status_text = st.empty()
                 
@@ -416,8 +438,8 @@ def display_data_preparation():
                     failed_counter = st.empty()
                     failed_counter.metric("❌ Failed", "0")
                 with stats_col3:
-                    rate_limit_info = st.empty()
-                    rate_limit_info.info("🕐 Rate limit delay: Variable")
+                    api_info = st.empty()
+                    api_info.info("🌐 Using EODHD API")
                 
                 # Progress callback that updates individual stock status
                 successful_count = 0
@@ -433,7 +455,6 @@ def display_data_preparation():
                     # Update status text
                     if "Waiting" in status:
                         status_text.text(f"⏸️ {status}")
-                        rate_limit_info.warning(f"🕐 {status}")
                     else:
                         status_text.text(f"Processing {ticker} ({current}/{total})... {status}")
                     
@@ -456,17 +477,19 @@ def display_data_preparation():
                             successful_count += 1
                             success_counter.metric("✅ Successful", str(successful_count))
                     
-                    # Update rate limit info if provided
+                    # Update API info if provided
                     if extra_info and "delay" in extra_info:
-                        rate_limit_info.info(f"🕐 Next delay: {extra_info['delay']:.1f}s")
+                        api_info.info(f"🌐 EODHD API - Next request in: {extra_info['delay']:.1f}s")
                 
                 # Initialise data loader and download
                 data_loader = DataLoader()
                 
                 try:
-                    with st.spinner("Initialising download..."):
+                    with st.spinner("Initialising EODHD download..."):
+                        # Use higher batch size for EODHD
                         data = data_loader.download_benchmark_data(
                             force_download=force_download,
+                            batch_size=10,  
                             progress_callback=detailed_progress_callback
                         )
                         
@@ -479,7 +502,8 @@ def display_data_preparation():
                             ✅ **Download Complete!**
                             - Successfully downloaded: {successful_count}/{len(dow30_tickers)} stocks ({success_rate:.1f}%)
                             - Failed downloads: {failed_count}
-                            - Total time: Check logs for details
+                            - Data source: EODHD Historical Data API
+                            - Cache location: data/benchmark_dow30_eodhd_*.pkl
                             """)
                             
                             if selected_ticker in data:
@@ -490,10 +514,19 @@ def display_data_preparation():
                                 - Total Trading Days: {len(data[selected_ticker])}
                                 """)
                         else:
-                            st.error("❌ No data was successfully downloaded. Please try again later.")
+                            st.error("❌ No data was successfully downloaded. Please check your EODHD API key and quota.")
                             
                 except Exception as e:
                     st.error(f"❌ Error during download: {str(e)}")
+                    if "API" in str(e) or "key" in str(e).lower():
+                        st.info("""
+                        💡 **Troubleshooting Tips:**
+                        1. Check your EODHD API key is valid
+                        2. Verify your API quota hasn't been exceeded
+                        3. Try downloading fewer stocks if on a free plan
+                        4. Check internet connection
+                        5. Verify the API key is in .streamlit/secrets.toml
+                        """)
                     st.exception(e)
     
     with col2:
@@ -580,7 +613,7 @@ def display_data_preparation():
             ax1.axvspan(pd.Timestamp('1997-01-01'), pd.Timestamp('2011-12-31'), 
                        alpha=0.3, color='green', label='Training Period (1997-2011)')
         
-        ax1.set_title(f"{selected_ticker} Stock Price - Benchmark Periods")
+        ax1.set_title(f"{selected_ticker} Stock Price - Benchmark Periods (Source: EODHD)")
         ax1.set_ylabel("Price ($)")
         ax1.legend()
         ax1.grid(True, alpha=0.3)
@@ -607,6 +640,7 @@ def display_data_preparation():
         - Validation Samples: {len(prepared['X_val'])}
         - Testing Samples: {len(prepared['X_test'])}
         - Image Size: {prepared['X_train'].shape[1]}x{prepared['X_train'].shape[2]} pixels
+        - Data Source: EODHD Historical Data API
         
         Ready for model training and benchmark comparison!
         """)
@@ -1333,7 +1367,7 @@ def display_performance_analysis():
     st.markdown('</div>', unsafe_allow_html=True)
 
 def display_batch_experiment_page():
-    """Display the batch experiment page for comprehensive benchmarking."""
+    """Display the batch experiment page - FIXED to clear results when dropdown changes"""
     st.markdown('<div class="sub-header">Comprehensive Benchmark Experiment</div>', unsafe_allow_html=True)
     
     st.markdown("""
@@ -1352,6 +1386,28 @@ def display_batch_experiment_page():
             options=["2007-2012", "2012-2017"],
             help="Choose the benchmark test period"
         )
+        
+        # CHECK IF TEST PERIOD CHANGED AND CLEAR PREVIOUS RESULTS
+        if 'previous_test_period' not in st.session_state:
+            st.session_state.previous_test_period = test_period
+        
+        if st.session_state.previous_test_period != test_period:
+            # Clear all previous results when test period changes
+            st.session_state.show_current_results = False
+            if 'batch_results' in st.session_state:
+                del st.session_state.batch_results
+            if 'batch_successful_results' in st.session_state:
+                del st.session_state.batch_successful_results
+            if 'batch_test_period' in st.session_state:
+                del st.session_state.batch_test_period
+            if 'batch_unique_key' in st.session_state:
+                del st.session_state.batch_unique_key
+            
+            # Update the stored test period
+            st.session_state.previous_test_period = test_period
+            
+            # Force a rerun to clear the display
+            st.rerun()
         
         max_stocks = st.slider(
             "Number of Stocks to Test",
@@ -1378,10 +1434,10 @@ def display_batch_experiment_page():
         quick_run = st.checkbox(
             "Quick Run (Reduced Epochs)", 
             value=False,
-            help="Use fewer epochs for faster testing (30 vs 100 epochs)"
+            help="Use fewer epochs for faster testing (30 vs 50 epochs)"
         )
     
-    # Show paper comparison info
+    # Show paper comparison info (only for current selection)
     st.markdown("### 📋 Benchmark Paper Comparison")
     if test_period == "2007-2012":
         st.info("""
@@ -1391,10 +1447,7 @@ def display_batch_experiment_page():
         - Buy & Hold Return: 5.86%
         - Success Rate: 76.7% (23/30 stocks outperformed)
         - Stocks Tested: 29 Dow 30 stocks
-
-        **Your Results Will Appear Here After Running the Experiment**
-        Results will vary from the benchmark due to implementation differences and neural network stochasticity.
-""")
+        """)
     else:
         st.info("""
         **Sezer & Ozbayoglu (2018) Results for 2012-2017:**
@@ -1403,15 +1456,15 @@ def display_batch_experiment_page():
         - Buy & Hold Return: 13.25%
         - Success Rate: 44.8% (13/29 stocks outperformed)
         - Stocks Tested: 29 Dow 30 stocks
-        
-        
-        **Your Results Will Appear Here After Running the Experiment**
-        Results will vary from the benchmark due to implementation differences and neural network stochasticity.
-""")
+        """)
     
+    # Run experiment button
     if st.button("🚀 Run Comprehensive Benchmark Experiment"):
         if max_stocks < 10:
-            st.warning("⚠️ Consider testing at least 10 stocks for meaningful statistical comparison with the benchmark paper.")
+            st.warning("⚠️ Consider testing at least 10 stocks for meaningful statistical comparison.")
+        
+        # Clear previous results flag
+        st.session_state.show_current_results = False
         
         selected_stocks = stock_selection if stock_selection else None
         
@@ -1424,23 +1477,48 @@ def display_batch_experiment_page():
             )
             
             if summary:
-                st.session_state.batch_results = summary
                 st.success("✅ Comprehensive benchmark experiment completed successfully!")
-                
-                display_comprehensive_benchmark_comparison(summary, test_period)
     
-    if 'batch_results' in st.session_state:
-        st.markdown("### 📊 Previous Comprehensive Results")
-        summary = st.session_state.batch_results
+    # Show current results ONLY if:
+    # 1. Flag is set to show results
+    # 2. Results exist
+    # 3. Results are for the CURRENT test period (not previous)
+    if (st.session_state.get('show_current_results', False) and 
+        'batch_results' in st.session_state and 
+        st.session_state.batch_results is not None and
+        st.session_state.get('batch_test_period') == test_period):  # IMPORTANT: Check period matches
         
-        st.info(f"""
-        **Last Experiment Summary:**
-        - Test Period: {summary['test_period']}
-        - Stocks Tested: {summary['num_stocks']}
-        - Average Accuracy: {summary['avg_accuracy']:.1%}
-        - Success Rate vs Buy & Hold: {summary['success_rate']:.1%}
-        - Average Outperformance: {summary['avg_outperformance']:.2%}
-        """)
+        st.markdown("---")  # Visual separator
+        
+        # Get stored results
+        summary = st.session_state.batch_results
+        successful_results = st.session_state.get('batch_successful_results', [])
+        test_period_used = st.session_state.get('batch_test_period', 'Unknown')
+        unique_key = st.session_state.get('batch_unique_key', 'default')
+        
+        # Show when results were generated
+        st.info(f"📊 **Current Results** | Test Period: {test_period_used} | Stocks: {len(successful_results)}")
+        
+        # Display the results with unique key
+        if successful_results:
+            display_batch_results_fixed(summary, successful_results, test_period_used, unique_key)
+        else:
+            st.warning("Detailed results not available. Please run a new experiment.")
+
+def clear_batch_results():
+    """Helper function to manually clear all batch results from session state"""
+    keys_to_clear = [
+        'batch_results', 
+        'batch_successful_results', 
+        'batch_test_period', 
+        'batch_unique_key', 
+        'show_current_results',
+        'previous_test_period'
+    ]
+    
+    for key in keys_to_clear:
+        if key in st.session_state:
+            del st.session_state[key]
 
 def display_comprehensive_benchmark_comparison(summary, test_period):
     """Display comprehensive comparison with benchmark paper."""
@@ -1484,12 +1562,22 @@ def display_comprehensive_benchmark_comparison(summary, test_period):
             st.warning("📉 Underperformed benchmark")
 
 def run_batch_experiment_direct(test_period, selected_stocks, max_stocks, quick_run):
-    """Run batch experiment directly without separate module."""
+    """Run batch experiment directly without separate module - EODHD version."""
     try:
         from utils.data_loader import DataLoader
         from utils.feature_engineering import FeatureEngineer
         from utils.model import CNNTradingModel
         from utils.trading_strategy import TradingStrategy
+        
+        # Check EODHD configuration first
+        try:
+            from utils.eodhdapi import get_client
+            client = get_client()
+            st.info("✅ Using EODHD API for batch experiment")
+        except Exception as e:
+            st.error(f"❌ EODHD API Error: {str(e)}")
+            st.stop()
+            return None
         
         if selected_stocks is None:
             selected_stocks = [
@@ -1498,13 +1586,14 @@ def run_batch_experiment_direct(test_period, selected_stocks, max_stocks, quick_
                 "NKE", "PFE", "PG", "TRV", "UNH", "UTX", "V", "VZ", "WMT", "XOM"
             ][:max_stocks]
         
-        st.info(f"Starting batch experiment for {test_period} with {len(selected_stocks)} stocks")
+        st.info(f"Starting batch experiment for {test_period} with {len(selected_stocks)} stocks using EODHD")
         
         data_loader = DataLoader()
         feature_engineer = FeatureEngineer()
         
-        with st.spinner("Downloading benchmark data..."):
-            data = data_loader.download_benchmark_data(force_download=False)
+        with st.spinner("Downloading benchmark data from EODHD..."):
+            # EODHD allows larger batch sizes
+            data = data_loader.download_benchmark_data(force_download=False, batch_size=10)
         
         results = {}
         successful_results = []
@@ -1598,6 +1687,17 @@ def run_batch_experiment_direct(test_period, selected_stocks, max_stocks, quick_
         
         if successful_results:
             summary = generate_batch_summary_direct(successful_results, test_period)
+            
+            # Store results in session state with unique timestamp
+            unique_key = f"{test_period}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+            st.session_state.batch_results = summary
+            st.session_state.batch_successful_results = successful_results
+            st.session_state.batch_test_period = test_period
+            st.session_state.batch_unique_key = unique_key
+            st.session_state.show_current_results = True
+            
+            st.success("✅ Batch experiment completed using EODHD data!")
+            
             return summary
         else:
             st.error("No successful results generated")
@@ -1607,6 +1707,210 @@ def run_batch_experiment_direct(test_period, selected_stocks, max_stocks, quick_
         st.error(f"Error in batch experiment: {str(e)}")
         st.exception(e)
         return None
+
+def display_batch_results_fixed(summary, successful_results, test_period, unique_key):
+    """Display results with fixed duplicate key issues"""
+    
+    st.markdown("### 📊 Comprehensive Experiment Results")
+    
+    # Summary metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Stocks Tested", summary['num_stocks'])
+    with col2:
+        st.metric("Average Accuracy", f"{summary['avg_accuracy']:.1%}")
+    with col3:
+        st.metric("Success Rate vs B&H", f"{summary['success_rate']:.1%}")
+    with col4:
+        st.metric("Average Outperformance", f"{summary['avg_outperformance']:.2%}")
+    
+    # Individual stock results table
+    st.markdown("### 📋 Individual Stock Results")
+    
+    # Create results table
+    results_data = []
+    for result in successful_results:
+        results_data.append({
+            'Ticker': result['ticker'],
+            'Accuracy': f"{result['classification_accuracy']:.1%}",
+            'Strategy Return': f"{result['strategy_results']['total_return']:.1%}",
+            'B&H Return': f"{result['benchmark_results']['total_return']:.1%}",
+            'Outperformance': f"{(result['strategy_results']['total_return'] - result['benchmark_results']['total_return']):.1%}",
+            'Max Drawdown': f"{result['strategy_results']['max_drawdown']:.1%}",
+            'Sharpe Ratio': f"{result['strategy_results']['sharpe_ratio']:.2f}",
+            'Trades': result['strategy_results']['number_of_trades'],
+            'Outperformed': "✅" if result['outperformed_benchmark'] else "❌"
+        })
+    
+    results_df = pd.DataFrame(results_data)
+    st.dataframe(results_df, use_container_width=True, hide_index=True)
+    
+    # Benchmark comparison
+    display_comprehensive_benchmark_comparison(summary, test_period)
+    
+    # CSV Download only (no JSON)
+    st.markdown("### 📥 Download Results")
+    
+    # Create CSV data in memory
+    summary_data = []
+    for result in successful_results:
+        summary_data.append({
+            'Ticker': result['ticker'],
+            'Classification_Accuracy': result['classification_accuracy'],
+            'Strategy_Return': result['strategy_results']['total_return'],
+            'BuyHold_Return': result['benchmark_results']['total_return'],
+            'Outperformance': result['strategy_results']['total_return'] - 
+                            result['benchmark_results']['total_return'],
+            'Strategy_Drawdown': result['strategy_results']['max_drawdown'],
+            'BuyHold_Drawdown': result['benchmark_results']['max_drawdown'],
+            'Sharpe_Ratio': result['strategy_results']['sharpe_ratio'],
+            'Num_Trades': result['strategy_results']['number_of_trades'],
+            'Win_Rate': result['strategy_results']['win_rate'],
+            'Outperformed': result['outperformed_benchmark']
+        })
+    
+    if summary_data:
+        # Convert to CSV string in memory
+        summary_df = pd.DataFrame(summary_data)
+        csv_string = summary_df.to_csv(index=False)
+        
+        # Create filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        csv_filename = f"benchmark_results_{test_period}_{timestamp}.csv"
+        
+        # Single CSV download button with unique key
+        st.download_button(
+            label="📥 Download CSV Results",
+            data=csv_string,
+            file_name=csv_filename,
+            mime='text/csv',
+            key=f"csv_download_{unique_key}",  # Use the unique key from session state
+            help="Download complete results as CSV file",
+            use_container_width=False
+        )
+        
+        st.success("✅ CSV file ready for download! Results will remain visible after downloading.")
+
+
+def display_batch_results(summary, successful_results, test_period):
+    """Display results that persist after download"""
+    
+    st.markdown("### 📊 Comprehensive Experiment Results")
+    
+    # Summary metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Stocks Tested", summary['num_stocks'])
+    with col2:
+        st.metric("Average Accuracy", f"{summary['avg_accuracy']:.1%}")
+    with col3:
+        st.metric("Success Rate vs B&H", f"{summary['success_rate']:.1%}")
+    with col4:
+        st.metric("Average Outperformance", f"{summary['avg_outperformance']:.2%}")
+    
+    # Individual stock results table
+    st.markdown("### 📋 Individual Stock Results")
+    
+    # Create results table
+    results_data = []
+    for result in successful_results:
+        results_data.append({
+            'Ticker': result['ticker'],
+            'Accuracy': f"{result['classification_accuracy']:.1%}",
+            'Strategy Return': f"{result['strategy_results']['total_return']:.1%}",
+            'B&H Return': f"{result['benchmark_results']['total_return']:.1%}",
+            'Outperformance': f"{(result['strategy_results']['total_return'] - result['benchmark_results']['total_return']):.1%}",
+            'Max Drawdown': f"{result['strategy_results']['max_drawdown']:.1%}",
+            'Sharpe Ratio': f"{result['strategy_results']['sharpe_ratio']:.2f}",
+            'Trades': result['strategy_results']['number_of_trades'],
+            'Outperformed': "✅" if result['outperformed_benchmark'] else "❌"
+        })
+    
+    results_df = pd.DataFrame(results_data)
+    st.dataframe(results_df, use_container_width=True, hide_index=True)
+    
+    # Benchmark comparison
+    display_comprehensive_benchmark_comparison(summary, test_period)
+    
+    # Download section
+    handle_csv_download(successful_results, test_period)
+
+def handle_csv_download(successful_results, test_period):
+    """Handle CSV creation and download without causing refresh"""
+    
+    st.markdown("### 📥 Download Results")
+    
+    # Create CSV data in memory (don't write to file)
+    summary_data = []
+    for result in successful_results:
+        summary_data.append({
+            'Ticker': result['ticker'],
+            'Classification_Accuracy': result['classification_accuracy'],
+            'Strategy_Return': result['strategy_results']['total_return'],
+            'BuyHold_Return': result['benchmark_results']['total_return'],
+            'Outperformance': result['strategy_results']['total_return'] - 
+                            result['benchmark_results']['total_return'],
+            'Strategy_Drawdown': result['strategy_results']['max_drawdown'],
+            'BuyHold_Drawdown': result['benchmark_results']['max_drawdown'],
+            'Sharpe_Ratio': result['strategy_results']['sharpe_ratio'],
+            'Num_Trades': result['strategy_results']['number_of_trades'],
+            'Win_Rate': result['strategy_results']['win_rate'],
+            'Outperformed': result['outperformed_benchmark']
+        })
+    
+    if summary_data:
+        # Convert to CSV string in memory (no file writing)
+        summary_df = pd.DataFrame(summary_data)
+        csv_string = summary_df.to_csv(index=False)
+        
+        # Create filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        csv_filename = f"benchmark_results_{test_period}_{timestamp}.csv"
+        
+        # Download buttons side by side
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # CSV download button
+            st.download_button(
+                label="📥 Download CSV Results",
+                data=csv_string,
+                file_name=csv_filename,
+                mime='text/csv',
+                key=f"download_csv_{test_period}_{timestamp}",  # Unique key prevents refresh
+                help="Download summary results as CSV file",
+                use_container_width=True
+            )
+        
+        with col2:
+            # JSON download button
+            detailed_results = {
+                'test_period': test_period,
+                'timestamp': datetime.now().isoformat(),
+                'num_stocks': len(successful_results),
+                'summary_statistics': {
+                    'avg_accuracy': np.mean([r['classification_accuracy'] for r in successful_results]),
+                    'success_rate': sum(r['outperformed_benchmark'] for r in successful_results) / len(successful_results),
+                    'avg_outperformance': np.mean([r['strategy_results']['total_return'] - r['benchmark_results']['total_return'] for r in successful_results])
+                },
+                'individual_results': successful_results
+            }
+            
+            json_string = json.dumps(detailed_results, indent=2, default=str)
+            json_filename = f"benchmark_detailed_{test_period}_{timestamp}.json"
+            
+            st.download_button(
+                label="📄 Download Detailed JSON",
+                data=json_string,
+                file_name=json_filename,
+                mime='application/json',
+                key=f"download_json_{test_period}_{timestamp}",  # Unique key
+                help="Download complete results with all metrics as JSON",
+                use_container_width=True
+            )
+        
+        st.success("✅ Files ready for download! Results will remain visible after downloading.")
+
 
 def generate_batch_summary_direct(results, test_period):
     """Generate summary from batch results."""

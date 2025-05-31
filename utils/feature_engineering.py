@@ -337,8 +337,8 @@ class FeatureEngineer:
             'improvements_applied': [
                 f'OPTIMISED prediction horizon: {prediction_horizon} days',
                 f'Dataset balancing: {balance_method}',
-                'Improved image normalization',
-                'Noise injection for generalization',
+                'Improved image normalisation',
+                'Noise injection for generalisation',
                 'OPTIMISED volatility-adjusted thresholds (0.3 vs 0.5)'
             ]
         }

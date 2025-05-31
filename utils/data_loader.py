@@ -1,21 +1,22 @@
 """
-Data Loader Module
+Data Loader Module - EODHD Version
 
-This module handles downloading and preprocessing financial data for the trading model.
-The implementation follows the approach in Sezer & Ozbayoglu (2018) with proper benchmark dates.
-Includes robust rate limiting and retry logic for Yahoo Finance API.
+This module handles downloading and preprocessing financial data using EODHD API.
 """
 
 import os
 import pandas as pd
 import numpy as np
-import yfinance as yf
 from datetime import datetime, timedelta
 from sklearn.preprocessing import MinMaxScaler
 import logging
 import time
 import random
 from typing import Dict, List, Optional
+import streamlit as st
+
+# Import the EODHD client
+from utils.eodhdapi import EODHDClient, get_client
 
 DATE_FORMAT = "%d/%m/%Y"
 
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 class DataLoader:
     def __init__(self, cache_dir="data"):
         """
-        Initialise the DataLoader.
+        Initialise the DataLoader with EODHD client.
         
         Args:
             cache_dir: Directory to cache downloaded data
@@ -32,57 +33,83 @@ class DataLoader:
         self.cache_dir = cache_dir
         self.scaler = MinMaxScaler(feature_range=(0, 1))
         
+        # Initialise EODHD client
+        try:
+            self.eodhd_client = get_client()
+            logger.info("Successfully initialised EODHD client")
+        except Exception as e:
+            logger.error(f"Failed to initialise EODHD client: {str(e)}")
+            self.eodhd_client = None
+        
         # Create cache directory if it doesn't exist
         if not os.path.exists(cache_dir):
             os.makedirs(cache_dir)
     
-    def download_single_stock_with_retry(self, ticker: str, start: str, end: str, 
-                                       max_retries: int = 3, base_delay: float = 1.0) -> Optional[pd.DataFrame]:
+    def format_ticker_for_eodhd(self, ticker: str) -> str:
         """
-        Download data for a single stock with retry logic and rate limiting.
+        Format ticker for EODHD API (add .US suffix for US stocks).
+        
+        Args:
+            ticker: Original ticker symbol
+            
+        Returns:
+            Formatted ticker for EODHD
+        """
+        # Special cases for indices
+        if ticker == '^GSPC':
+            return 'SPY.US'  # Use SPY ETF as proxy for S&P 500
+        elif ticker in ['^FTSE', 'FTSE.INDX', 'UKX.INDX']:
+            return 'ISF.LSE'  # Use iShares FTSE 100 ETF
+        # Add .US suffix if not present
+        elif '.' not in ticker:
+            return f"{ticker}.US"
+        return ticker
+    
+    def download_single_stock_eodhd(self, ticker: str, start: str, end: str, 
+                                  max_retries: int = 3) -> Optional[pd.DataFrame]:
+        """
+        Download data for a single stock using EODHD API.
         
         Args:
             ticker: Stock ticker symbol
             start: Start date in YYYY-MM-DD format
             end: End date in YYYY-MM-DD format
             max_retries: Maximum number of retry attempts
-            base_delay: Base delay between requests in seconds
             
         Returns:
             DataFrame with stock data, or None if download fails
         """
+        if self.eodhd_client is None:
+            logger.error("EODHD client not initialised")
+            return None
+        
+        # Format ticker for EODHD
+        eodhd_ticker = self.format_ticker_for_eodhd(ticker)
+        
         for attempt in range(max_retries):
             try:
-                # Add random delay to avoid hitting rate limits
-                delay = base_delay * (2 ** attempt) + random.uniform(2.0, 5.0)
+                # Add small delay to respect rate limits
                 if attempt > 0:
-                    logger.info(f"Retrying {ticker} after {delay:.1f} seconds (attempt {attempt + 1}/{max_retries})")
+                    delay = 2 * (attempt + 1)  # 2, 4, 6 seconds
+                    logger.info(f"Retrying {ticker} after {delay} seconds (attempt {attempt + 1}/{max_retries})")
                     time.sleep(delay)
                 else:
-                    # Add delay even for first attempt
-                    time.sleep(random.uniform(3.0, 5.0))  # New: delay for first attempt
+                    # Small delay even for first attempt
+                    time.sleep(0.5)
                 
-                # Download data for single ticker
-                logger.info(f"Downloading {ticker}...")
-                stock_data = yf.download(
-                    ticker, 
-                    start=start, 
-                    end=end, 
-                    progress=False,  # Disable progress bar to reduce API calls
-                    auto_adjust=True,  # Handle splits and dividends
-                    prepost=False,  # Only trading hours
-                    threads=False   # Single threaded to avoid rate limits
+                # Download data using EODHD
+                logger.info(f"Downloading {ticker} (as {eodhd_ticker}) from EODHD...")
+                stock_data = self.eodhd_client.download(
+                    symbol=eodhd_ticker,
+                    start=start,
+                    end=end,
+                    interval='d'  # Daily data
                 )
                 
                 # Check if download was successful
-                if stock_data.empty or len(stock_data) < 100:
-                    logger.warning(f"Insufficient data for {ticker} (got {len(stock_data)} rows)")
+                if stock_data is None or stock_data.empty or len(stock_data) < 100:
+                    logger.warning(f"Insufficient data for {ticker} (got {len(stock_data) if stock_data is not None else 0} rows)")
                     return None
-                
-                # Keep only OHLCV data and clean column names
-                if isinstance(stock_data.columns, pd.MultiIndex):
-                    # Handle multi-level columns from yfinance
-                    stock_data = stock_data.droplevel(1, axis=1)
                 
                 # Ensure we have the required columns
                 required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
@@ -90,6 +117,7 @@ class DataLoader:
                     logger.error(f"Missing required columns for {ticker}")
                     return None
                 
+                # Keep only OHLCV data
                 stock_data = stock_data[required_cols]
                 
                 # Clean data - remove any NaN values
@@ -110,51 +138,47 @@ class DataLoader:
             except Exception as e:
                 logger.warning(f"Attempt {attempt + 1} failed for {ticker}: {str(e)}")
                 
-                # Check if it's a rate limit error
-                if "rate limit" in str(e).lower() or "too many requests" in str(e).lower():
-                    if attempt < max_retries - 1:
-                        # Exponential backoff for rate limits
-                        delay = base_delay * (3 ** attempt) + random.uniform(2, 5)
-                        logger.info(f"Rate limited. Waiting {delay:.1f} seconds before retry...")
-                        time.sleep(delay)
-                        continue
-                
-                # For other errors, wait a bit but don't use exponential backoff
+                # For EODHD errors, wait a bit before retry
                 if attempt < max_retries - 1:
                     time.sleep(random.uniform(1, 3))
         
         logger.error(f"Failed to download data for {ticker} after {max_retries} attempts")
         return None
     
-    def download_benchmark_data(self, force_download=False, batch_size=5, progress_callback=None):
+    def download_benchmark_data(self, force_download=False, batch_size=10, progress_callback=None):
         """
-        Download historical data for Dow 30 components using the exact benchmark date range
-        from Sezer & Ozbayoglu (2018): 1997-2017 for complete coverage.
+        Download historical data for Dow 30 components using EODHD API.
         
         Args:
             force_download: Force fresh download even if cached data exists
-            batch_size: Number of stocks to download in each batch (smaller = slower but more reliable)
+            batch_size: Number of stocks to download in each batch (can be higher with EODHD)
             progress_callback: Callback function for progress updates
             
         Returns:
             Dictionary of DataFrames with stock data
         """
-        # Use the complete benchmark paper's date range for both training periods
-        start_date = "01/01/1997"  # Extended range to match paper
-        end_date = "31/12/2017"    # Benchmark end date
+        if self.eodhd_client is None:
+            logger.error("EODHD client not initialised. Please check your API key.")
+            if progress_callback:
+                progress_callback(0, 1, "Error", "EODHD client not initialised")
+            return {}
         
-        # Convert dates to yfinance format
+        # Use the complete benchmark paper's date range
+        start_date = "01/01/1997"
+        end_date = "31/12/2017"
+        
+        # Convert dates to EODHD format
         start = datetime.strptime(start_date, DATE_FORMAT).strftime("%Y-%m-%d")
         end = datetime.strptime(end_date, DATE_FORMAT).strftime("%Y-%m-%d")
         
-        # Dow 30 components during the benchmark period (exact same as paper)
+        # Dow 30 components during the benchmark period
         dow30_tickers = [
             "AAPL", "AXP", "BA", "CAT", "CSCO", "CVX", "DD", "DIS", "GE", "GS",
             "HD", "IBM", "INTC", "JNJ", "JPM", "KO", "MCD", "MMM", "MRK", "MSFT",
             "NKE", "PFE", "PG", "TRV", "UNH", "UTX", "V", "VZ", "WMT", "XOM"
         ]
         
-        cache_file = os.path.join(self.cache_dir, f"benchmark_dow30_{start}_{end}.pkl")
+        cache_file = os.path.join(self.cache_dir, f"benchmark_dow30_eodhd_{start}_{end}.pkl")
         
         # Return cached data if available
         if os.path.exists(cache_file) and not force_download:
@@ -174,8 +198,8 @@ class DataLoader:
                 logger.warning(f"Failed to load cached data: {e}. Downloading fresh data...")
         
         # Download fresh data
-        logger.info(f"Downloading benchmark Dow 30 data from {start} to {end}")
-        logger.info(f"Using batch size of {batch_size} stocks to avoid rate limits")
+        logger.info(f"Downloading benchmark Dow 30 data from {start} to {end} using EODHD")
+        logger.info(f"Using batch size of {batch_size} stocks")
         
         data = {}
         successful_downloads = 0
@@ -187,13 +211,8 @@ class DataLoader:
             if progress_callback:
                 progress_callback(i, len(dow30_tickers), ticker, "downloading...")
             
-            # Download with enhanced retry logic
-            stock_data = self.download_single_stock_with_retry_enhanced(
-                ticker, start, end, max_retries=3, base_delay=2.0, 
-                progress_callback=progress_callback, 
-                current_index=i, 
-                total_tickers=len(dow30_tickers)
-            )
+            # Download with EODHD
+            stock_data = self.download_single_stock_eodhd(ticker, start, end, max_retries=3)
             
             if stock_data is not None:
                 data[ticker] = stock_data
@@ -208,28 +227,26 @@ class DataLoader:
                 if progress_callback:
                     progress_callback(i + 1, len(dow30_tickers), ticker, "❌ Failed")
             
-            # Add delay between individual downloads within batch
+            # EODHD has more generous rate limits, so we can use shorter delays
             if i < len(dow30_tickers) - 1:
-                delay = random.uniform(1.5, 3.0)
+                delay = random.uniform(0.5, 1.5)  # Much shorter delays
                 time.sleep(delay)
             
-            # Add longer delay between batches
+            # Batch delay - also shorter for EODHD
             if (i + 1) % batch_size == 0 and i < len(dow30_tickers) - 1:
-                batch_delay = random.uniform(5, 10)
+                batch_delay = random.uniform(2, 5)  # Shorter batch delays
                 batch_num = (i + 1) // batch_size
                 logger.info(f"Batch {batch_num} complete. Waiting {batch_delay:.1f} seconds before next batch...")
                 
                 if progress_callback:
-                    for wait_second in range(int(batch_delay)):
-                        remaining = int(batch_delay - wait_second)
-                        progress_callback(
-                            i + 1, 
-                            len(dow30_tickers), 
-                            f"Batch {batch_num}", 
-                            f"Waiting {remaining}s to avoid rate limit...",
-                            {"delay": remaining}
-                        )
-                        time.sleep(1)
+                    progress_callback(
+                        i + 1, 
+                        len(dow30_tickers), 
+                        f"Batch {batch_num}", 
+                        f"Waiting {batch_delay:.1f}s...",
+                        {"delay": batch_delay}
+                    )
+                    time.sleep(batch_delay)
         
         logger.info(f"Download complete: {successful_downloads}/{len(dow30_tickers)} stocks successful")
         
@@ -242,141 +259,6 @@ class DataLoader:
                 logger.warning(f"Failed to cache data: {e}")
         else:
             logger.error("No data was successfully downloaded!")
-        
-        return data
-    
-    def download_single_stock_with_retry_enhanced(self, ticker: str, start: str, end: str, 
-                                            max_retries: int = 3, base_delay: float = 1.0,
-                                            progress_callback=None, current_index=0, 
-                                            total_tickers=1) -> Optional[pd.DataFrame]:
-        """
-        Enhanced version of download_single_stock_with_retry with progress callback support.
-        
-        Args:
-            ticker: Stock ticker symbol
-            start: Start date in YYYY-MM-DD format
-            end: End date in YYYY-MM-DD format
-            max_retries: Maximum number of retry attempts
-            base_delay: Base delay between requests in seconds
-            progress_callback: Optional callback for progress updates
-            current_index: Current ticker index for progress tracking
-            total_tickers: Total number of tickers for progress tracking
-            
-        Returns:
-            DataFrame with stock data, or None if download fails
-        """
-        for attempt in range(max_retries):
-            try:
-                # Add random delay to avoid hitting rate limits
-                delay = base_delay * (2 ** attempt) + random.uniform(0.5, 2.0)
-                if attempt > 0:
-                    logger.info(f"Retrying {ticker} after {delay:.1f} seconds (attempt {attempt + 1}/{max_retries})")
-                    
-                    # Update progress with retry status
-                    if progress_callback:
-                        progress_callback(
-                            current_index, 
-                            total_tickers, 
-                            ticker, 
-                            f"Retrying (attempt {attempt + 1}/{max_retries})...",
-                            {"delay": delay}
-                        )
-                        
-                    time.sleep(delay)
-                
-                # Download data for single ticker
-                logger.info(f"Downloading {ticker}...")
-                stock_data = yf.download(
-                    ticker, 
-                    start=start, 
-                    end=end, 
-                    progress=False,  # Disable progress bar to reduce API calls
-                    auto_adjust=True,  # Handle splits and dividends
-                    prepost=False,  # Only trading hours
-                    threads=False   # Single threaded to avoid rate limits
-                )
-                
-                # Check if download was successful
-                if stock_data.empty or len(stock_data) < 100:
-                    logger.warning(f"Insufficient data for {ticker} (got {len(stock_data)} rows)")
-                    return None
-                
-                # Keep only OHLCV data and clean column names
-                if isinstance(stock_data.columns, pd.MultiIndex):
-                    # Handle multi-level columns from yfinance
-                    stock_data = stock_data.droplevel(1, axis=1)
-                
-                # Ensure we have the required columns
-                required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-                if not all(col in stock_data.columns for col in required_cols):
-                    logger.error(f"Missing required columns for {ticker}")
-                    return None
-                
-                stock_data = stock_data[required_cols]
-                
-                # Clean data - remove any NaN values
-                initial_len = len(stock_data)
-                stock_data = stock_data.dropna()
-                final_len = len(stock_data)
-                
-                if final_len < initial_len * 0.95:  # Lost more than 5% of data
-                    logger.warning(f"Removed {initial_len - final_len} NaN rows from {ticker}")
-                
-                if len(stock_data) < 100:
-                    logger.warning(f"Insufficient clean data for {ticker} after cleaning")
-                    return None
-                
-                logger.info(f"Successfully downloaded {len(stock_data)} rows for {ticker}")
-                return stock_data
-                
-            except Exception as e:
-                logger.warning(f"Attempt {attempt + 1} failed for {ticker}: {str(e)}")
-                
-                # Check if it's a rate limit error
-                if "rate limit" in str(e).lower() or "too many requests" in str(e).lower():
-                    if attempt < max_retries - 1:
-                        # Exponential backoff for rate limits
-                        delay = base_delay * (3 ** attempt) + random.uniform(2, 5)
-                        logger.info(f"Rate limited. Waiting {delay:.1f} seconds before retry...")
-                        time.sleep(delay)
-                        continue
-                
-                # For other errors, wait a bit but don't use exponential backoff
-                if attempt < max_retries - 1:
-                    time.sleep(random.uniform(1, 3))
-        
-        logger.error(f"Failed to download data for {ticker} after {max_retries} attempts")
-        return None
-    
-    def download_stocks_sequentially(self, tickers: List[str], start: str, end: str, 
-                                   delay_range: tuple = (2, 5)) -> Dict[str, pd.DataFrame]:
-        """
-        Download multiple stocks sequentially with delays to avoid rate limiting.
-        
-        Args:
-            tickers: List of stock tickers
-            start: Start date in YYYY-MM-DD format
-            end: End date in YYYY-MM-DD format
-            delay_range: Tuple of (min_delay, max_delay) in seconds between downloads
-            
-        Returns:
-            Dictionary of DataFrames with stock data
-        """
-        data = {}
-        
-        for i, ticker in enumerate(tickers):
-            logger.info(f"Downloading {ticker} ({i+1}/{len(tickers)})")
-            
-            stock_data = self.download_single_stock_with_retry(ticker, start, end)
-            
-            if stock_data is not None:
-                data[ticker] = stock_data
-            
-            # Add delay between downloads (except for the last one)
-            if i < len(tickers) - 1:
-                delay = random.uniform(delay_range[0], delay_range[1])
-                logger.info(f"Waiting {delay:.1f} seconds before next download...")
-                time.sleep(delay)
         
         return data
     

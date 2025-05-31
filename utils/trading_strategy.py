@@ -161,12 +161,12 @@ class TradingStrategy:
         # Rest of the method remains the same...
         is_multiclass = len(signals.shape) > 1 and signals.shape[1] > 1
         
-        # Use OPTIMIZED threshold method
+        # Use OPTIMISED threshold method
         if preferred_method == 'fixed' or fixed_threshold is not None:
             confidence_threshold = final_threshold
             logger.info(f"Using OPTIMISED FIXED threshold: {confidence_threshold:.3f}")
         else:
-            # Dynamic method with optimization
+            # Dynamic method with optimisation
             if is_multiclass:
                 max_probs = np.max(signals, axis=1)
                 # Use optimised percentile based on stock performance
