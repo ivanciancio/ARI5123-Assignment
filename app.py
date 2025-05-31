@@ -23,7 +23,6 @@ from torchinfo import summary as torch_summary
 from sklearn.metrics import confusion_matrix, roc_curve, auc
 import seaborn as sns
 import os
-import json
 from datetime import datetime
 
 # Set page configuration - THIS MUST BE THE FIRST STREAMLIT COMMAND
@@ -945,7 +944,7 @@ Implementation follows Sezer & Ozbayoglu (2018) benchmark methodology:
         
         with col1:
             initial_capital = st.number_input(
-                "Initial Capital (£)",
+                "Initial Capital ($)",
                 min_value=1000,
                 max_value=1000000,
                 value=10000,
@@ -1149,7 +1148,7 @@ Neural network training is inherently stochastic, resulting in:
 **Strategy Configuration Used:**
 - Threshold Method: {threshold_method}
 - Threshold Value: {threshold_display}
-- Initial Capital: £{initial_capital:,}
+- Initial Capital: ${initial_capital:,}
 - Transaction Cost: {transaction_cost:.2%}
             """)
             
@@ -1219,7 +1218,7 @@ Neural network training is inherently stochastic, resulting in:
         with col2:
             st.info(f"""
 **Parameters:**
-- Capital: £{config['initial_capital']:,}
+- Capital: ${config['initial_capital']:,}
 - Transaction Cost: {config['transaction_cost']:.2%}
 - Max Position: {config['max_position_size']:.0%}
             """)
@@ -1373,8 +1372,7 @@ def display_batch_experiment_page():
     st.markdown("""
     <div class="info-box">
         Run comprehensive benchmarking experiments across multiple stocks to generate results 
-        comparable to Sezer & Ozbayoglu (2018). This provides statistical significance for 
-        academic comparison and validation of your approach.
+        comparable to Sezer & Ozbayoglu (2018). 
     </div>
     """, unsafe_allow_html=True)
     
@@ -1748,7 +1746,7 @@ def display_batch_results_fixed(summary, successful_results, test_period, unique
     # Benchmark comparison
     display_comprehensive_benchmark_comparison(summary, test_period)
     
-    # CSV Download only (no JSON)
+    # CSV Download
     st.markdown("### 📥 Download Results")
     
     # Create CSV data in memory
@@ -1867,49 +1865,18 @@ def handle_csv_download(successful_results, test_period):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         csv_filename = f"benchmark_results_{test_period}_{timestamp}.csv"
         
-        # Download buttons side by side
-        col1, col2 = st.columns(2)
+        # CSV download button
+        st.download_button(
+            label="📥 Download CSV Results",
+            data=csv_string,
+            file_name=csv_filename,
+            mime='text/csv',
+            key=f"download_csv_{test_period}_{timestamp}",
+            help="Download summary results as CSV file",
+            use_container_width=True
+        )
         
-        with col1:
-            # CSV download button
-            st.download_button(
-                label="📥 Download CSV Results",
-                data=csv_string,
-                file_name=csv_filename,
-                mime='text/csv',
-                key=f"download_csv_{test_period}_{timestamp}",  # Unique key prevents refresh
-                help="Download summary results as CSV file",
-                use_container_width=True
-            )
-        
-        with col2:
-            # JSON download button
-            detailed_results = {
-                'test_period': test_period,
-                'timestamp': datetime.now().isoformat(),
-                'num_stocks': len(successful_results),
-                'summary_statistics': {
-                    'avg_accuracy': np.mean([r['classification_accuracy'] for r in successful_results]),
-                    'success_rate': sum(r['outperformed_benchmark'] for r in successful_results) / len(successful_results),
-                    'avg_outperformance': np.mean([r['strategy_results']['total_return'] - r['benchmark_results']['total_return'] for r in successful_results])
-                },
-                'individual_results': successful_results
-            }
-            
-            json_string = json.dumps(detailed_results, indent=2, default=str)
-            json_filename = f"benchmark_detailed_{test_period}_{timestamp}.json"
-            
-            st.download_button(
-                label="📄 Download Detailed JSON",
-                data=json_string,
-                file_name=json_filename,
-                mime='application/json',
-                key=f"download_json_{test_period}_{timestamp}",  # Unique key
-                help="Download complete results with all metrics as JSON",
-                use_container_width=True
-            )
-        
-        st.success("✅ Files ready for download! Results will remain visible after downloading.")
+        st.success("✅ CSV file ready for download! Results will remain visible after downloading.")
 
 
 def generate_batch_summary_direct(results, test_period):

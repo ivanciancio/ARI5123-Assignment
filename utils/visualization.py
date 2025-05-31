@@ -196,7 +196,7 @@ def plot_interactive_portfolio(portfolio_values, benchmark_values=None, dates=No
     fig.update_layout(
         title="Portfolio Performance",
         xaxis_title="Date" if dates is not None else "Trading Day",
-        yaxis_title="Portfolio Value (£)",
+        yaxis_title="Portfolio Value ($)",
         legend=dict(x=0.01, y=0.99),
         hovermode="x unified",
         template="plotly_white"
@@ -204,7 +204,7 @@ def plot_interactive_portfolio(portfolio_values, benchmark_values=None, dates=No
     
     # Format hover tooltip
     fig.update_traces(
-        hovertemplate="<b>%{x}</b><br>Value: £%{y:.2f}<extra></extra>"
+        hovertemplate="<b>%{x}</b><br>Value: $%{y:.2f}<extra></extra>"
     )
     
     return fig
