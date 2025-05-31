@@ -104,7 +104,7 @@ def get_client():
                 return client
         except Exception as e:
             st.error(f"API Key found but test request failed: {str(e)}")
-            st.error("Please check if your API key is valid and has access to the EOD Historical Data API.")
+            st.error("Please check if API key is valid and has access to the EOD Historical Data API.")
             raise ValueError("Invalid API key or API request failed")
             
     except KeyError:

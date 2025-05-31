@@ -18,7 +18,7 @@ class SimpleCNN(nn.Module):
     def __init__(self):
         super(SimpleCNN, self).__init__()
         
-        # OPTIMISED architecture based on your results analysis
+        # OPTIMISED architecture based on model results analysis
         self.conv1 = nn.Conv2d(1, 12, kernel_size=3, padding=1)  # Reduced filters
         self.bn1 = nn.BatchNorm2d(12)
         self.conv2 = nn.Conv2d(12, 24, kernel_size=3, padding=1)  # Progressive increase

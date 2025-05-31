@@ -190,8 +190,7 @@ def main():
     
     st.markdown("""
     <div class="info-box">
-        This application implements an intelligent algorithmic trading system using Convolutional Neural Networks (CNNs).
-        The approach is based on Sezer & Ozbayoglu (2018) with modern enhancements.
+        An intelligent algorithmic trading system has been implemented using Convolutional Neural Networks (CNNs). The approach is based upon Sezer & Ozbayoglu (2018), with modern enhancements having been incorporated.
     </div>
     """, unsafe_allow_html=True)
     
@@ -333,7 +332,7 @@ def display_data_preparation():
         st.info("""
         To use this application, you need an EODHD API key:
         1. Sign up at https://eodhd.com
-        2. Get your API key from the dashboard
+        2. Get API key from the dashboard
         3. Add it to Streamlit secrets as EODHD_API_KEY
         """)
         st.stop()
@@ -344,7 +343,7 @@ def display_data_preparation():
     
     st.markdown("""
     <div class="info-box">
-        For accurate benchmarking against Sezer & Ozbayoglu (2018), we use the same data range and methodology:
+        For accurate benchmarking against Sezer & Ozbayoglu (2018), the same data range and methodology are used:
         - Full dataset: January 1997 to December 2017
         - Test Period 1: 2007-2012 (includes financial crisis)
         - Test Period 2: 2012-2017 (bull market period)
@@ -513,15 +512,15 @@ def display_data_preparation():
                                 - Total Trading Days: {len(data[selected_ticker])}
                                 """)
                         else:
-                            st.error("❌ No data was successfully downloaded. Please check your EODHD API key and quota.")
+                            st.error("❌ No data was successfully downloaded. Please check EODHD API key and quota.")
                             
                 except Exception as e:
                     st.error(f"❌ Error during download: {str(e)}")
                     if "API" in str(e) or "key" in str(e).lower():
                         st.info("""
                         💡 **Troubleshooting Tips:**
-                        1. Check your EODHD API key is valid
-                        2. Verify your API quota hasn't been exceeded
+                        1. Check EODHD API key is valid
+                        2. Verify API quota hasn't been exceeded
                         3. Try downloading fewer stocks if on a free plan
                         4. Check internet connection
                         5. Verify the API key is in .streamlit/secrets.toml
@@ -984,7 +983,7 @@ Implementation follows Sezer & Ozbayoglu (2018) benchmark methodology:
                     max_value=0.30,
                     value=0.15,
                     step=0.02,
-                    help="Lower values = more trades, higher values = fewer trades. Your model needs lower thresholds due to low confidence."
+                    help="Lower values = more trades, higher values = fewer trades. The model needs lower thresholds due to low confidence."
                 )
             else:
                 st.info("Using dynamic thresholds based on signal distribution")
@@ -1314,7 +1313,7 @@ def display_performance_analysis():
             'Success Rate vs Buy & Hold',
             'Number of Stocks Tested'
         ],
-        'Your Results': [
+        'Model Results': [
             model_accuracy,
             f"{strategy_results['annualised_return']:.2%}",
             f"{benchmark_results['annualised_return']:.2%}" if benchmark_results else 'N/A',
@@ -1527,7 +1526,7 @@ def display_comprehensive_benchmark_comparison(summary, test_period):
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("#### 🎯 Your Results")
+        st.markdown("#### 🎯 Model Results")
         st.metric("Stocks Tested", f"{summary['num_stocks']}")
         st.metric("Avg Classification Accuracy", f"{summary['avg_accuracy']:.1%}")
         st.metric("Success Rate vs B&H", f"{summary['success_rate']:.1%}")

@@ -158,7 +158,7 @@ class DataLoader:
             Dictionary of DataFrames with stock data
         """
         if self.eodhd_client is None:
-            logger.error("EODHD client not initialised. Please check your API key.")
+            logger.error("EODHD client not initialised. Please check API key.")
             if progress_callback:
                 progress_callback(0, 1, "Error", "EODHD client not initialised")
             return {}
