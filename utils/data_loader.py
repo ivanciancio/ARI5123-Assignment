@@ -13,7 +13,6 @@ import logging
 import time
 import random
 from typing import Dict, List, Optional
-import streamlit as st
 
 # Import the EODHD client
 from utils.eodhdapi import EODHDClient, get_client
@@ -36,7 +35,6 @@ class DataLoader:
         # Initialise EODHD client
         try:
             self.eodhd_client = get_client()
-            logger.info("Successfully initialised EODHD client")
         except Exception as e:
             logger.error(f"Failed to initialise EODHD client: {str(e)}")
             self.eodhd_client = None
@@ -80,7 +78,6 @@ class DataLoader:
             DataFrame with stock data, or None if download fails
         """
         if self.eodhd_client is None:
-            logger.error("EODHD client not initialised")
             return None
         
         # Format ticker for EODHD
@@ -90,59 +87,43 @@ class DataLoader:
             try:
                 # Add small delay to respect rate limits
                 if attempt > 0:
-                    delay = 2 * (attempt + 1)  # 2, 4, 6 seconds
-                    logger.info(f"Retrying {ticker} after {delay} seconds (attempt {attempt + 1}/{max_retries})")
+                    delay = 2 * (attempt + 1)
                     time.sleep(delay)
                 else:
-                    # Small delay even for first attempt
                     time.sleep(0.5)
                 
                 # Download data using EODHD
-                logger.info(f"Downloading {ticker} (as {eodhd_ticker}) from EODHD...")
                 stock_data = self.eodhd_client.download(
                     symbol=eodhd_ticker,
                     start=start,
                     end=end,
-                    interval='d'  # Daily data
+                    interval='d'
                 )
                 
                 # Check if download was successful
                 if stock_data is None or stock_data.empty or len(stock_data) < 100:
-                    logger.warning(f"Insufficient data for {ticker} (got {len(stock_data) if stock_data is not None else 0} rows)")
                     return None
                 
                 # Ensure we have the required columns
                 required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
                 if not all(col in stock_data.columns for col in required_cols):
-                    logger.error(f"Missing required columns for {ticker}")
                     return None
                 
                 # Keep only OHLCV data
                 stock_data = stock_data[required_cols]
                 
                 # Clean data - remove any NaN values
-                initial_len = len(stock_data)
                 stock_data = stock_data.dropna()
-                final_len = len(stock_data)
-                
-                if final_len < initial_len * 0.95:  # Lost more than 5% of data
-                    logger.warning(f"Removed {initial_len - final_len} NaN rows from {ticker}")
                 
                 if len(stock_data) < 100:
-                    logger.warning(f"Insufficient clean data for {ticker} after cleaning")
                     return None
                 
-                logger.info(f"Successfully downloaded {len(stock_data)} rows for {ticker}")
                 return stock_data
                 
             except Exception as e:
-                logger.warning(f"Attempt {attempt + 1} failed for {ticker}: {str(e)}")
-                
-                # For EODHD errors, wait a bit before retry
                 if attempt < max_retries - 1:
                     time.sleep(random.uniform(1, 3))
         
-        logger.error(f"Failed to download data for {ticker} after {max_retries} attempts")
         return None
     
     def download_benchmark_data(self, force_download=False, batch_size=10, progress_callback=None):
@@ -151,14 +132,13 @@ class DataLoader:
         
         Args:
             force_download: Force fresh download even if cached data exists
-            batch_size: Number of stocks to download in each batch (can be higher with EODHD)
+            batch_size: Number of stocks to download in each batch
             progress_callback: Callback function for progress updates
             
         Returns:
             Dictionary of DataFrames with stock data
         """
         if self.eodhd_client is None:
-            logger.error("EODHD client not initialised. Please check API key.")
             if progress_callback:
                 progress_callback(0, 1, "Error", "EODHD client not initialised")
             return {}
@@ -182,10 +162,8 @@ class DataLoader:
         
         # Return cached data if available
         if os.path.exists(cache_file) and not force_download:
-            logger.info(f"Loading cached benchmark data from {cache_file}")
             try:
                 cached_data = pd.read_pickle(cache_file)
-                logger.info(f"Loaded {len(cached_data)} stocks from cache")
                 
                 # If progress callback provided, show instant completion
                 if progress_callback:
@@ -194,20 +172,17 @@ class DataLoader:
                             progress_callback(i + 1, len(dow30_tickers), ticker, "✅ Cached")
                 
                 return cached_data
-            except Exception as e:
-                logger.warning(f"Failed to load cached data: {e}. Downloading fresh data...")
+            except Exception:
+                pass
         
         # Download fresh data
-        logger.info(f"Downloading benchmark Dow 30 data from {start} to {end} using EODHD")
-        logger.info(f"Using batch size of {batch_size} stocks")
-        
         data = {}
         successful_downloads = 0
         failed_downloads = 0
         
         # Process stocks
         for i, ticker in enumerate(dow30_tickers):
-            # Update progress - starting download
+            # Update progress
             if progress_callback:
                 progress_callback(i, len(dow30_tickers), ticker, "downloading...")
             
@@ -217,48 +192,39 @@ class DataLoader:
             if stock_data is not None:
                 data[ticker] = stock_data
                 successful_downloads += 1
-                logger.info(f"✅ {ticker}: {len(stock_data)} rows downloaded")
                 
                 if progress_callback:
                     progress_callback(i + 1, len(dow30_tickers), ticker, "✅ Success")
             else:
                 failed_downloads += 1
-                logger.error(f"❌ {ticker}: Download failed")
                 if progress_callback:
                     progress_callback(i + 1, len(dow30_tickers), ticker, "❌ Failed")
             
-            # EODHD has more generous rate limits, so we can use shorter delays
+            # EODHD has more generous rate limits
             if i < len(dow30_tickers) - 1:
-                delay = random.uniform(0.5, 1.5)  # Much shorter delays
+                delay = random.uniform(0.5, 1.5)
                 time.sleep(delay)
             
-            # Batch delay - also shorter for EODHD
+            # Batch delay
             if (i + 1) % batch_size == 0 and i < len(dow30_tickers) - 1:
-                batch_delay = random.uniform(2, 5)  # Shorter batch delays
-                batch_num = (i + 1) // batch_size
-                logger.info(f"Batch {batch_num} complete. Waiting {batch_delay:.1f} seconds before next batch...")
+                batch_delay = random.uniform(2, 5)
                 
                 if progress_callback:
                     progress_callback(
                         i + 1, 
                         len(dow30_tickers), 
-                        f"Batch {batch_num}", 
+                        f"Batch {(i + 1) // batch_size}", 
                         f"Waiting {batch_delay:.1f}s...",
                         {"delay": batch_delay}
                     )
                     time.sleep(batch_delay)
         
-        logger.info(f"Download complete: {successful_downloads}/{len(dow30_tickers)} stocks successful")
-        
-        # Cache the downloaded data even if incomplete
+        # Cache the downloaded data
         if data:
             try:
                 pd.to_pickle(data, cache_file)
-                logger.info(f"Cached {len(data)} stocks to {cache_file}")
-            except Exception as e:
-                logger.warning(f"Failed to cache data: {e}")
-        else:
-            logger.error("No data was successfully downloaded!")
+            except Exception:
+                pass
         
         return data
     
@@ -298,10 +264,6 @@ class DataLoader:
         train_data = df[train_start:train_end]
         test_data = df[test_start:test_end]
         
-        logger.info(f"Benchmark split for {ticker} ({test_period}):")
-        logger.info(f"  Training: {len(train_data)} samples ({train_start} to {train_end})")
-        logger.info(f"  Testing: {len(test_data)} samples ({test_start} to {test_end})")
-        
         return {
             'train_data': train_data,
             'test_data': test_data,
@@ -313,7 +275,7 @@ class DataLoader:
     
     def get_test_dates(self, data, ticker, window_size=30, train_ratio=0.7, val_ratio=0.15):
         """
-        Legacy method for backward compatibility.
+        Get test dates for a given ticker (legacy support).
         """
         if ticker not in data:
             raise ValueError(f"Ticker {ticker} not found in data")
