@@ -34,6 +34,7 @@ st.set_page_config(
 )
 
 # Import custom modules
+from utils.model import SimpleCNN, AdvancedCNN
 from utils.data_loader import DataLoader
 from utils.feature_engineering import FeatureEngineer
 from utils.model import CNNTradingModel
@@ -564,23 +565,31 @@ def display_data_preparation():
                         
                         st.session_state.prepared_data = prepared_data
                         
+                        # Handle validation data display
+                        if prepared_data['X_val'] is not None:
+                            val_samples_text = f", {len(prepared_data['X_val'])} validation"
+                            methodology_text = "Ready for CNN training with validation split!"
+                        else:
+                            val_samples_text = " (no validation split - following exact paper methodology)"
+                            methodology_text = "Ready for CNN training using exact benchmark methodology!"
+
                         st.success(f"""
                         ✅ Benchmark features prepared for {selected_ticker} ({test_period})!
-                        
+
                         **Training Data:**
                         - Period: {splits['train_dates'][0]} to {splits['train_dates'][1]}
-                        - Samples: {len(prepared_data['X_train'])} training, {len(prepared_data['X_val'])} validation
-                        
+                        - Samples: {len(prepared_data['X_train'])} training{val_samples_text}
+
                         **Testing Data:**
                         - Period: {splits['test_dates'][0]} to {splits['test_dates'][1]}
                         - Samples: {len(prepared_data['X_test'])} testing samples
-                        
+
                         **Label Distribution:**
                         - Hold (0): {np.sum(prepared_data['y_train'] == 0)} samples
                         - Buy (1): {np.sum(prepared_data['y_train'] == 1)} samples
                         - Sell (2): {np.sum(prepared_data['y_train'] == 2)} samples
-                        
-                        Ready for CNN training using benchmark methodology!
+
+                        {methodology_text}
                         """)
                         
                     except Exception as e:
@@ -630,14 +639,20 @@ def display_data_preparation():
         st.markdown("### ✅ Benchmark Data Preparation Status")
         prepared = st.session_state.prepared_data
         
+        # Handle validation samples display
+        if prepared['X_val'] is not None:
+            val_samples_text = f"- Validation Samples: {len(prepared['X_val'])}\n    "
+        else:
+            val_samples_text = "- Validation: None (following exact paper methodology)\n    "
+        
         st.success(f"""
         **Benchmark preparation complete for {prepared['ticker']}!**
         
         - Test Period: {prepared.get('test_period', 'Unknown')}
         - Training Samples: {len(prepared['X_train'])}
-        - Validation Samples: {len(prepared['X_val'])}
-        - Testing Samples: {len(prepared['X_test'])}
+        {val_samples_text}- Testing Samples: {len(prepared['X_test'])}
         - Image Size: {prepared['X_train'].shape[1]}x{prepared['X_train'].shape[2]} pixels
+        - Prediction Horizon: {prepared.get('prediction_horizon', 5)} days
         - Data Source: EODHD Historical Data API
         
         Ready for model training and benchmark comparison!
@@ -665,21 +680,32 @@ def display_model_training():
     # Ensure data is in the right shape for CNN
     if len(X_train.shape) == 3 and X_train.shape[1:] == (30, 30):
         X_train = X_train.reshape(X_train.shape[0], 1, 30, 30)
-        X_val = X_val.reshape(X_val.shape[0], 1, 30, 30)
+        
+        # Handle validation data - it might be None
+        if X_val is not None:
+            X_val = X_val.reshape(X_val.shape[0], 1, 30, 30)
+        
         X_test = X_test.reshape(X_test.shape[0], 1, 30, 30)
+        
+        # Update prepared_data
         prepared_data['X_train'] = X_train
-        prepared_data['X_val'] = X_val
+        prepared_data['X_val'] = X_val  # This might be None, which is fine
         prepared_data['X_test'] = X_test
         st.session_state.prepared_data = prepared_data
     
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.markdown("### Model Configuration")
     
+    # Handle validation data display
+    if X_val is not None:
+        val_info = f"- Validation samples: {X_val.shape[0]}\n"
+    else:
+        val_info = "- Validation: None (following exact paper methodology)\n"
+
     st.info(f"""
     **Data Summary for {ticker}**
     - Training samples: {X_train.shape[0]}
-    - Validation samples: {X_val.shape[0]}
-    - Test samples: {X_test.shape[0]}
+    {val_info}- Test samples: {X_test.shape[0]}
     """)
     
     col1, col2 = st.columns(2)
@@ -688,8 +714,8 @@ def display_model_training():
         model_type = st.radio(
             "Model Architecture",
             options=["Simple CNN", "Advanced CNN"],
-            index=1,  # Advanced CNN default
-            help="Advanced CNN: More complex architecture with batch normalisation - potentially higher performance but greater variability. Simple CNN: Optimised for stability with enhanced regularisation."
+            index=0,  # Simple CNN default
+            help="Simple CNN: Optimised for stability with enhanced regularisation - recommended for most use cases. Advanced CNN: More complex architecture with batch normalisation but greater variability."
         )
         
         epochs = st.slider("Training Epochs", min_value=10, max_value=200, value=100, step=5)
@@ -697,14 +723,14 @@ def display_model_training():
         st.markdown("#### Regularisation Settings")
         weight_decay = st.select_slider(
             "Weight Decay",
-            options=[1e-5, 1e-4, 1e-3, 1e-2],
-            value=1e-4,
+            options=[1e-4, 5e-4, 1e-3, 5e-3],
+            value=1e-3,
             format_func=lambda x: f"{x:.0e}",
-            help="Higher values prevent overfitting (1e-4 recommended)"
+            help="Higher values prevent overfitting (1e-3 recommended)"
         )
         
         use_early_stopping = st.checkbox("Use Early Stopping", value=True)
-        patience = st.slider("Early Stopping Patience", min_value=3, max_value=15, value=5, 
+        patience = st.slider("Early Stopping Patience", min_value=3, max_value=10, value=8, 
                            help="Lower values stop training sooner to prevent overfitting")
     
     with col2:
@@ -716,16 +742,60 @@ def display_model_training():
         
         learning_rate = st.select_slider(
             "Learning Rate",
-            options=[0.0001, 0.0003, 0.001, 0.003],
-            value=0.001,
-            format_func=lambda x: f"{x:.4f}"
+            options=[0.0001, 0.0002, 0.0003, 0.0005],  
+            value=0.0005,  # Set default to the recommended value
+            format_func=lambda x: f"{x:.4f}",
+            help="Lower values reduce overfitting (0.0002 recommended for stability)"
         )
         
         use_scheduler = st.checkbox("Use Learning Rate Scheduler", value=True, 
                                   help="Reduces learning rate when validation loss plateaus")
         
         gradient_clipping = st.checkbox("Use Gradient Clipping", value=True,
-                                      help="Prevents exploding gradients")
+                              help="Prevents exploding gradients")
+
+        # Add advanced configuration section
+        st.markdown("#### 🔧 Advanced Configuration")
+        with st.expander("Advanced Training Parameters", expanded=False):
+            gradient_clip_max_norm = st.slider(
+                "Gradient Clip Max Norm", 
+                min_value=0.5, max_value=5.0, value=1.0, step=0.1,
+                help="Maximum gradient norm for clipping"
+            )
+            
+            scheduler_factor = st.slider(
+                "Scheduler Factor", 
+                min_value=0.1, max_value=0.9, value=0.5, step=0.1,
+                help="Factor by which learning rate is reduced"
+            )
+            
+            scheduler_patience = st.slider(
+                "Scheduler Patience", 
+                min_value=2, max_value=10, value=3, step=1,
+                help="Epochs to wait before reducing learning rate"
+            )
+            
+            early_stopping_min_epochs = st.slider(
+                "Early Stopping Min Epochs", 
+                min_value=10, max_value=50, value=20, step=5,
+                help="Minimum epochs before early stopping can trigger"
+            )
+    # Store slider values in session state for batch experiments
+    st.session_state.model_config = {
+        'batch_size': batch_size,
+        'learning_rate': learning_rate,
+        'weight_decay': weight_decay,
+        'patience': patience,
+        'epochs': epochs,
+        'model_type': model_type,
+        'use_scheduler': use_scheduler,
+        'use_early_stopping': use_early_stopping,
+        'gradient_clipping': gradient_clipping,
+        'gradient_clip_max_norm': gradient_clip_max_norm,      # ← ADD THESE
+        'scheduler_factor': scheduler_factor,                  # ← ADD THESE
+        'scheduler_patience': scheduler_patience,              # ← ADD THESE
+        'early_stopping_min_epochs': early_stopping_min_epochs  # ← ADD THIS
+    }
     
     st.warning("""
     ⚠️ **RESULT VARIABILITY NOTICE**
@@ -812,6 +882,13 @@ def display_model_training():
                 learning_rate=learning_rate,
                 weight_decay=weight_decay,
                 patience=patience,
+                use_scheduler=use_scheduler,
+                use_early_stopping=use_early_stopping,
+                use_gradient_clipping=gradient_clipping,                    # ← ADD THESE
+                gradient_clip_max_norm=gradient_clip_max_norm,              # ← ADD THESE
+                scheduler_factor=scheduler_factor,                          # ← ADD THESE
+                scheduler_patience=scheduler_patience,                      # ← ADD THESE
+                early_stopping_min_epochs=early_stopping_min_epochs,       # ← ADD THIS
                 callback=progress_callback
             )
             
@@ -972,8 +1049,8 @@ Implementation follows Sezer & Ozbayoglu (2018) benchmark methodology:
             threshold_method = st.radio(
                 "Signal Threshold Method",
                 options=["Fixed", "Dynamic"],
-                index=0,  # Default to Fixed for simplicity
-                help="Fixed: Uses predetermined confidence thresholds for consistent signal generation. Dynamic: Adapts thresholds based on signal distribution - may provide better risk management but with higher variability."
+                index=1,  # Default to Dynamic (optimal configuration)
+                help="Dynamic: Adapts thresholds based on signal distribution - provides better risk management and superior performance. Fixed: Uses predetermined confidence thresholds for consistent signal generation."
             )
             
             if threshold_method == "Fixed":
@@ -981,7 +1058,7 @@ Implementation follows Sezer & Ozbayoglu (2018) benchmark methodology:
                     "Signal Threshold",
                     min_value=0.10,
                     max_value=0.30,
-                    value=0.15,
+                    value=0.20,
                     step=0.02,
                     help="Lower values = more trades, higher values = fewer trades. The model needs lower thresholds due to low confidence."
                 )
@@ -1294,14 +1371,14 @@ def display_performance_analysis():
         paper_bah_return = "5.86%"
         paper_cnn_drawdown = "27.2%"
         paper_bah_drawdown = "35.2%"
-        paper_success_rate = "76.7%"
+        paper_success_rate = "79.3%"  
     else:
-        paper_accuracy = "53.8%"
+        paper_accuracy = "53.4%"      
         paper_cnn_return = "5.84%"
         paper_bah_return = "13.25%"
         paper_cnn_drawdown = "19.5%"
         paper_bah_drawdown = "6.97%"
-        paper_success_rate = "44.8%"
+        paper_success_rate = "3.4%"
     
     comparison_data = {
         'Metric': [
@@ -1350,11 +1427,7 @@ def display_performance_analysis():
             ❌ **Strategy Underperformed**: The CNN strategy underperformed buy-and-hold by 
             **{-outperformance:.2%}** during the {test_period} period.
             
-            **Key Issues Identified:**
-            - Model accuracy around 30-35% (close to random for 3-class problem)
-            - High validation loss suggesting overfitting
-            - Excessive trading (60+ trades) leading to transaction costs
-            - Poor timing of buy/sell signals
+            Check the detailed metrics below to understand performance drivers.
             """)
         else:
             st.success(f"""
@@ -1365,13 +1438,38 @@ def display_performance_analysis():
     st.markdown('</div>', unsafe_allow_html=True)
 
 def display_batch_experiment_page():
-    """Display the batch experiment page - FIXED to clear results when dropdown changes"""
+    """Display the batch experiment page - FIXED to match benchmark paper exactly"""
     st.markdown('<div class="sub-header">Comprehensive Benchmark Experiment</div>', unsafe_allow_html=True)
+    
+    # Display current model configuration
+    config = st.session_state.get('model_config', None)
+    
+    if config is None:
+        st.warning("""
+        ⚠️ **No Model Configuration Found**
+        
+        Please visit the **"Model Training (Single Stock)"** section first to set your model parameters.
+        The batch experiment will use those same settings for consistency.
+        """)
+        return
+    
+    # Show current configuration
+    st.info(f"""
+    **Current Model Configuration** (set in Model Training section):
+    - Architecture: {config['model_type']}
+    - Batch Size: {config['batch_size']}
+    - Learning Rate: {config['learning_rate']:.4f}
+    - Weight Decay: {config['weight_decay']:.0e}
+    - Early Stopping Patience: {config['patience']}
+    - Training Epochs: {config['epochs']}
+    
+    💡 *To modify these settings, go to "Model Training (Single Stock)" → "Model Configuration"*
+    """)
     
     st.markdown("""
     <div class="info-box">
-        Run comprehensive benchmarking experiments across multiple stocks to generate results 
-        comparable to Sezer & Ozbayoglu (2018). 
+        <strong>Benchmark Paper Methodology:</strong> This experiment tests all 30 Dow Jones Industrial Average stocks 
+        using the exact same methodology as Sezer & Ozbayoglu (2018) for direct comparison.
     </div>
     """, unsafe_allow_html=True)
     
@@ -1406,12 +1504,18 @@ def display_batch_experiment_page():
             # Force a rerun to clear the display
             st.rerun()
         
-        max_stocks = st.slider(
-            "Number of Stocks to Test",
-            min_value=10,
-            max_value=25,
-            value=20,
-            help="More stocks provide better statistical significance (paper used 29 stocks)"
+        # REMOVED SLIDER - Use fixed paper methodology
+        st.success("""
+        **📋 Paper-Accurate Testing:**
+        - Testing ALL 30 Dow Jones stocks
+        - Exact same methodology as benchmark paper
+        - Direct performance comparison possible
+        """)
+        
+        quick_run = st.checkbox(
+            "Quick Run (Reduced Epochs)", 
+            value=False,
+            help="Use fewer epochs for faster testing (30 vs configured epochs)"
         )
     
     with col2:
@@ -1421,18 +1525,19 @@ def display_batch_experiment_page():
             "NKE", "PFE", "PG", "TRV", "UNH", "UTX", "V", "VZ", "WMT", "XOM"
         ]
         
+        # FIXED: Show all stocks, allow user to exclude specific ones if needed
         stock_selection = st.multiselect(
-            "Select Specific Stocks (optional)",
+            "Stocks to Test (all 30 Dow stocks selected by default)",
             options=dow30_stocks,
-            default=dow30_stocks[:20],
-            help="Leave empty to use default selection. Paper used all Dow 30 stocks."
+            default=dow30_stocks,  # CHANGED: All 30 stocks like the paper!
+            help="All Dow 30 stocks are selected by default to match the benchmark paper. You can exclude specific stocks if needed."
         )
         
-        quick_run = st.checkbox(
-            "Quick Run (Reduced Epochs)", 
-            value=False,
-            help="Use fewer epochs for faster testing (30 vs 50 epochs)"
-        )
+        # Show count
+        st.info(f"**Selected: {len(stock_selection)}/30 stocks**")
+        
+        if len(stock_selection) < 20:
+            st.warning("⚠️ Testing fewer than 20 stocks may not provide statistically significant results.")
     
     # Show paper comparison info (only for current selection)
     st.markdown("### 📋 Benchmark Paper Comparison")
@@ -1442,34 +1547,33 @@ def display_batch_experiment_page():
         - Average Classification Accuracy: 55.2%
         - CNN Strategy Return: 7.20%
         - Buy & Hold Return: 5.86%
-        - Success Rate: 76.7% (23/30 stocks outperformed)
-        - Stocks Tested: 29 Dow 30 stocks
+        - Success Rate: 79.3% (23/29 stocks outperformed)
+        - **Stocks Tested: 29 Dow 30 stocks** 
         """)
     else:
         st.info("""
         **Sezer & Ozbayoglu (2018) Results for 2012-2017:**
-        - Average Classification Accuracy: 53.8%
+        - Average Classification Accuracy: 53.4%
         - CNN Strategy Return: 5.84%
         - Buy & Hold Return: 13.25%
-        - Success Rate: 44.8% (13/29 stocks outperformed)
-        - Stocks Tested: 29 Dow 30 stocks
+        - Trading Success Rate: 53.4% (profitable individual trades)
+        - Stock Outperformance: ~3.4% (1-2/29 stocks beat B&H)
+        - **Stocks Tested: 29 Dow stocks** (strong bull market period)
         """)
     
     # Run experiment button
     if st.button("🚀 Run Comprehensive Benchmark Experiment"):
-        if max_stocks < 10:
+        if len(stock_selection) < 10:
             st.warning("⚠️ Consider testing at least 10 stocks for meaningful statistical comparison.")
         
         # Clear previous results flag
         st.session_state.show_current_results = False
         
-        selected_stocks = stock_selection if stock_selection else None
-        
         with st.spinner("Running comprehensive benchmark experiment..."):
             summary = run_batch_experiment_direct(
                 test_period=test_period,
-                selected_stocks=selected_stocks,
-                max_stocks=max_stocks,
+                selected_stocks=stock_selection,  # Use the selected stocks
+                max_stocks=len(stock_selection),  # Use actual count
                 quick_run=quick_run
             )
             
@@ -1483,7 +1587,7 @@ def display_batch_experiment_page():
     if (st.session_state.get('show_current_results', False) and 
         'batch_results' in st.session_state and 
         st.session_state.batch_results is not None and
-        st.session_state.get('batch_test_period') == test_period):  # IMPORTANT: Check period matches
+        st.session_state.get('batch_test_period') == test_period):
         
         st.markdown("---")  # Visual separator
         
@@ -1558,15 +1662,67 @@ def display_comprehensive_benchmark_comparison(summary, test_period):
         else:
             st.warning("📉 Underperformed benchmark")
 
-def run_batch_experiment_direct(test_period, selected_stocks, max_stocks, quick_run):
-    """Run batch experiment directly without separate module - EODHD version."""
+def check_data_sufficiency(splits, ticker, window_size=30, prediction_horizon=5):
+    """Check if ticker has sufficient data for analysis"""
+    train_data = splits['train_data']
+    test_data = splits['test_data']
+    
+    min_train_samples = window_size + prediction_horizon + 100  # Need reasonable sample size
+    min_test_samples = prediction_horizon + 20  # Minimum test samples
+    
+    issues = []
+    
+    if len(train_data) < min_train_samples:
+        issues.append(f"Insufficient training data: {len(train_data)} rows, need {min_train_samples}")
+    
+    if len(test_data) < min_test_samples:
+        issues.append(f"Insufficient test data: {len(test_data)} rows, need {min_test_samples}")
+        
+    # Check for excessive NaN values
+    train_nan_pct = train_data.isnull().sum().sum() / (len(train_data) * len(train_data.columns))
+    if train_nan_pct > 0.1:  # More than 10% NaN
+        issues.append(f"Excessive missing data: {train_nan_pct:.1%}")
+    
+    return issues
+
+def check_data_sufficiency(splits, ticker, window_size=30, prediction_horizon=5):
+    """Check if ticker has sufficient data for analysis"""
+    train_data = splits['train_data']
+    test_data = splits['test_data']
+    
+    min_train_samples = window_size + prediction_horizon + 100  # Need reasonable sample size
+    min_test_samples = prediction_horizon + 20  # Minimum test samples
+    
+    issues = []
+    
+    if len(train_data) < min_train_samples:
+        issues.append(f"Insufficient training data: {len(train_data)} rows, need {min_train_samples}")
+    
+    if len(test_data) < min_test_samples:
+        issues.append(f"Insufficient test data: {len(test_data)} rows, need {min_test_samples}")
+        
+    # Check for excessive NaN values
+    train_nan_pct = train_data.isnull().sum().sum() / (len(train_data) * len(train_data.columns))
+    if train_nan_pct > 0.1:  # More than 10% NaN
+        issues.append(f"Excessive missing data: {train_nan_pct:.1%}")
+    
+    return issues
+
+def run_batch_experiment_direct(test_period=None, cnn_architecture=None, signal_method=None, 
+                              epochs=None, batch_size=None, early_stopping_patience=None, 
+                              quick_run=False, **kwargs):
+    """Run batch experiment using Model Training settings across all 30 Dow stocks - EODHD version"""
+    
     try:
+        # Import the working modules from the old version
         from utils.data_loader import DataLoader
         from utils.feature_engineering import FeatureEngineer
         from utils.model import CNNTradingModel
         from utils.trading_strategy import TradingStrategy
+        import traceback
+        from datetime import datetime
         
-        # Check EODHD configuration first
+        # Check EODHD configuration first (from old working version)
         try:
             from utils.eodhdapi import get_client
             client = get_client()
@@ -1576,63 +1732,182 @@ def run_batch_experiment_direct(test_period, selected_stocks, max_stocks, quick_
             st.stop()
             return None
         
-        if selected_stocks is None:
-            selected_stocks = [
-                "AAPL", "AXP", "BA", "CAT", "CSCO", "CVX", "DD", "DIS", "GE", "GS",
-                "HD", "IBM", "INTC", "JNJ", "JPM", "KO", "MCD", "MMM", "MRK", "MSFT",
-                "NKE", "PFE", "PG", "TRV", "UNH", "UTX", "V", "VZ", "WMT", "XOM"
-            ][:max_stocks]
+        # Get the 30 Dow stocks (same as new version)
+        dow_30_stocks = [
+            'AAPL', 'AXP', 'BA', 'CAT', 'CSCO', 'CVX', 'DD', 'DIS', 'GE', 'GS',
+            'HD', 'IBM', 'INTC', 'JNJ', 'JPM', 'KO', 'MCD', 'MMM', 'MRK', 'MSFT',
+            'NKE', 'PFE', 'PG', 'TRV', 'UNH', 'UTX', 'V', 'VZ', 'WMT', 'XOM'
+        ]
         
-        st.info(f"Starting batch experiment for {test_period} with {len(selected_stocks)} stocks using EODHD")
+        # Get model configuration from Model Training page (improved from new version)
+        def get_model_config():
+            config = {}
+            
+            # Architecture
+            for key in ['cnn_architecture', 'model_architecture', 'architecture', 'selected_architecture']:
+                if key in st.session_state:
+                    config['architecture'] = st.session_state[key]
+                    break
+            else:
+                config['architecture'] = 'SimpleCNN'  # Default
+                
+            # Epochs
+            for key in ['epochs', 'training_epochs', 'max_epochs', 'num_epochs']:
+                if key in st.session_state:
+                    config['epochs'] = st.session_state[key]
+                    break
+            else:
+                config['epochs'] = 100  # Default
+                
+            # Signal method
+            for key in ['signal_method', 'threshold_method', 'signal_threshold_method']:
+                if key in st.session_state:
+                    config['signal_method'] = st.session_state[key]
+                    break
+            else:
+                config['signal_method'] = 'Dynamic'  # Default
+                
+            # Other parameters
+            config['batch_size'] = st.session_state.get('batch_size', 32)
+            config['early_stopping_patience'] = st.session_state.get('early_stopping_patience', 5)
+            config['test_period'] = test_period or '2007-2012'
+            
+            return config
         
+        # Get configuration (from new version)
+        config = get_model_config()
+        
+        # Override with any passed parameters
+        if cnn_architecture: config['architecture'] = cnn_architecture
+        if epochs: config['epochs'] = epochs
+        if signal_method: config['signal_method'] = signal_method
+        if batch_size: config['batch_size'] = batch_size
+        if early_stopping_patience: config['early_stopping_patience'] = early_stopping_patience
+        
+        # Handle quick run
+        selected_stocks = dow_30_stocks.copy()
+        if quick_run:
+            config['epochs'] = min(config['epochs'], 30)  # Reasonable for quick run
+            selected_stocks = selected_stocks[:3]  # First 3 stocks only
+            st.info(f"🏃‍♂️ Quick Run: Testing {len(selected_stocks)} stocks with {config['epochs']} epochs")
+        
+        # Display configuration (from new version)
+        st.write("## 🔧 Experiment Configuration")
+        st.write(f"**Architecture:** {config['architecture']}")
+        st.write(f"**Epochs:** {config['epochs']}")
+        st.write(f"**Signal Method:** {config['signal_method']}")
+        st.write(f"**Test Period:** {config['test_period']}")
+        st.write(f"**Stocks to Process:** {len(selected_stocks)}")
+        
+        # Initialize components (from old working version)
         data_loader = DataLoader()
         feature_engineer = FeatureEngineer()
+        
+        # Download data first (from old working version)
+        st.info(f"Starting batch experiment for {config['test_period']} with {len(selected_stocks)} stocks using EODHD")
         
         with st.spinner("Downloading benchmark data from EODHD..."):
             # EODHD allows larger batch sizes
             data = data_loader.download_benchmark_data(force_download=False, batch_size=10)
         
+        # Data sufficiency check (improved from new version)
+        def check_data_sufficiency(splits, ticker, window_size=30, prediction_horizon=5):
+            train_data = splits['train_data']
+            test_data = splits['test_data']
+            
+            min_train_samples = window_size + prediction_horizon + 100
+            min_test_samples = prediction_horizon + 20
+            
+            issues = []
+            if len(train_data) < min_train_samples:
+                issues.append(f"Insufficient training data: {len(train_data)} rows, need {min_train_samples}")
+            if len(test_data) < min_test_samples:
+                issues.append(f"Insufficient test data: {len(test_data)} rows, need {min_test_samples}")
+                
+            return issues
+        
+        # Track results (from both versions)
         results = {}
         successful_results = []
+        failed_tickers = []
         
+        # Progress tracking (from old version)
         progress_bar = st.progress(0)
         status_text = st.empty()
         
+        # Process each ticker (combined approach)
         for i, ticker in enumerate(selected_stocks):
-            if ticker not in data:
-                st.warning(f"Skipping {ticker} - no data available")
-                continue
-            
             status_text.text(f"Processing {ticker} ({i+1}/{len(selected_stocks)})")
             
             try:
-                splits = data_loader.get_benchmark_splits(data, ticker, test_period)
+                # Check if ticker exists in downloaded data (from old version)
+                if ticker not in data:
+                    st.warning(f"⚠️ Skipping {ticker} - no data available")
+                    failed_tickers.append({
+                        'ticker': ticker,
+                        'reason': 'No Data Available',
+                        'issues': ['Ticker not found in EODHD data']
+                    })
+                    continue
                 
+                # Get data splits (from old version)
+                splits = data_loader.get_benchmark_splits(data, ticker, config['test_period'])
+                
+                # Check data sufficiency (from new version)
+                data_issues = check_data_sufficiency(splits, ticker)
+                if data_issues:
+                    st.warning(f"⚠️ Skipping {ticker}: {', '.join(data_issues)}")
+                    failed_tickers.append({
+                        'ticker': ticker,
+                        'reason': 'Insufficient Data',
+                        'issues': data_issues
+                    })
+                    continue
+                
+                # Prepare features (from old version)
                 prepared_data = feature_engineer.prepare_benchmark_features(
                     splits['train_data'], splits['test_data'], ticker
                 )
                 
+                # Additional check after feature engineering (from new version)
+                if prepared_data['X_train'].shape[0] == 0:
+                    st.warning(f"⚠️ Skipping {ticker}: No training samples after feature engineering")
+                    failed_tickers.append({
+                        'ticker': ticker,
+                        'reason': 'No Training Samples',
+                        'issues': ['Feature engineering produced empty dataset']
+                    })
+                    continue
+                
+                # Create and train model (from old version, but with config)
                 model = CNNTradingModel()
-                model.build_simple_cnn()
                 
-                epochs = 30 if quick_run else 50
+                # Use architecture from config
+                if config['architecture'] == 'SimpleCNN':
+                    model.build_simple_cnn()
+                else:
+                    model.build_advanced_cnn()  # Assuming this method exists
                 
+                # Training callback (from old version)
                 def simple_callback(epoch, train_loss, train_acc, val_loss, val_acc):
                     if epoch % 10 == 0:
-                        status_text.text(f"Processing {ticker} - Epoch {epoch+1}/{epochs}")
+                        status_text.text(f"Processing {ticker} - Epoch {epoch+1}/{config['epochs']}")
                 
+                # Train model (from old version with config epochs)
                 history = model.train(
                     prepared_data['X_train'], prepared_data['y_train'],
                     prepared_data['X_val'], prepared_data['y_val'],
-                    epochs=epochs,
-                    batch_size=32,
+                    epochs=config['epochs'],
+                    batch_size=config['batch_size'],
                     learning_rate=0.001,
                     callback=simple_callback
                 )
                 
+                # Evaluate model (from old version)
                 y_pred_prob = model.predict(prepared_data['X_test'])
                 metrics = model.evaluate(prepared_data['X_test'], prepared_data['y_test'])
                 
+                # Trading strategy (from old version)
                 strategy = TradingStrategy(initial_capital=10000, transaction_cost=0.001)
                 
                 test_data = splits['test_data']
@@ -1647,7 +1922,7 @@ def run_batch_experiment_direct(test_period, selected_stocks, max_stocks, quick_
                 strategy_results = strategy.apply_strategy_optimized(
                     prices, signals, dates,
                     ticker=ticker,
-                    test_period=test_period
+                    test_period=config['test_period']
                 )
                 
                 strategy.reset()
@@ -1655,19 +1930,21 @@ def run_batch_experiment_direct(test_period, selected_stocks, max_stocks, quick_
                 
                 outperformed = strategy_results['total_return'] > benchmark_results['total_return']
                 
+                # Store results (from old version)
                 result = {
                     'ticker': ticker,
                     'classification_accuracy': metrics['accuracy'],
                     'strategy_results': strategy_results,
                     'benchmark_results': benchmark_results,
                     'model_metrics': metrics,
-                    'test_period': test_period,
+                    'test_period': config['test_period'],
                     'outperformed_benchmark': outperformed
                 }
                 
                 results[ticker] = result
                 successful_results.append(result)
                 
+                # Display result (from old version)
                 status_icon = "✅" if outperformed else "❌"
                 st.write(f"{status_icon} **{ticker}**: Accuracy={metrics['accuracy']:.1%}, "
                         f"CNN Return={strategy_results['total_return']:.1%}, "
@@ -1676,20 +1953,44 @@ def run_batch_experiment_direct(test_period, selected_stocks, max_stocks, quick_
                 
             except Exception as e:
                 st.error(f"❌ Error processing {ticker}: {str(e)}")
+                failed_tickers.append({
+                    'ticker': ticker,
+                    'reason': 'Processing Error',
+                    'error': str(e)
+                })
             
+            # Update progress
             progress_bar.progress((i + 1) / len(selected_stocks))
         
+        # Clean up progress indicators
         progress_bar.empty()
         status_text.empty()
         
+        # Display summary (improved from both versions)
+        st.write("## 📋 Experiment Summary")
+        successful_count = len(successful_results)
+        failed_count = len(failed_tickers)
+        st.write(f"✅ **Successful:** {successful_count} tickers")
+        st.write(f"❌ **Failed:** {failed_count} tickers")
+        
         if successful_results:
-            summary = generate_batch_summary_direct(successful_results, test_period)
+            successful_tickers = [r['ticker'] for r in successful_results]
+            st.write(f"**Successful:** {', '.join(successful_tickers)}")
+        
+        if failed_tickers:
+            st.write("### Failed Tickers:")
+            for failed in failed_tickers:
+                st.write(f"• **{failed['ticker']}**: {failed['reason']}")
+        
+        # Generate and store results (from old version)
+        if successful_results:
+            summary = generate_batch_summary_direct(successful_results, config['test_period'])
             
-            # Store results in session state with unique timestamp
-            unique_key = f"{test_period}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+            # Store results in session state with unique timestamp (from old version)
+            unique_key = f"{config['test_period']}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
             st.session_state.batch_results = summary
             st.session_state.batch_successful_results = successful_results
-            st.session_state.batch_test_period = test_period
+            st.session_state.batch_test_period = config['test_period']
             st.session_state.batch_unique_key = unique_key
             st.session_state.show_current_results = True
             

@@ -345,11 +345,52 @@ class FeatureEngineer:
     
     def prepare_benchmark_features(self, train_data, test_data, ticker, window_size=30):
         """
-        Backward compatibility - now uses improved version by default.
+        Prepare features following EXACT benchmark methodology - no validation split.
         """
-        logger.info("Using IMPROVED feature preparation (recommended)")
-        return self.prepare_benchmark_features_improved(
-            train_data, test_data, ticker, window_size,
-            prediction_horizon=5,  # Shorter horizon
-            balance_method='hybrid'
+        logger.info(f"Preparing benchmark features for {ticker}")
+        
+        # Process training data
+        train_images = []
+        train_close_prices = train_data['Close'].values
+        
+        for i in range(len(train_close_prices) - window_size - 5):  # 5-day prediction as in paper
+            price_window = train_close_prices[i:i + window_size]
+            img = self.create_bar_chart_image_improved(price_window, window_size)
+            train_images.append(img)
+        
+        # Generate labels using ORIGINAL paper methodology (5-day horizon)
+        train_labels = self.generate_improved_labels(
+            train_data, ticker, window_size, 5, train_data  # 5 days as in paper
         )
+        
+        # Process testing data
+        test_images = []
+        test_close_prices = test_data['Close'].values
+        
+        for i in range(len(test_close_prices) - window_size - 5):
+            price_window = test_close_prices[i:i + window_size]
+            img = self.create_bar_chart_image_improved(price_window, window_size)
+            test_images.append(img)
+        
+        test_labels = self.generate_improved_labels(
+            test_data, ticker, window_size, 5, train_data
+        )
+        
+        # Convert to numpy arrays
+        X_train = np.array(train_images, dtype=np.float32)
+        y_train = np.array(train_labels, dtype=np.int64)
+        X_test = np.array(test_images, dtype=np.float32)
+        y_test = np.array(test_labels, dtype=np.int64)
+        
+        # NO VALIDATION SPLIT - use all training data as in the paper
+        return {
+            'X_train': X_train,
+            'y_train': y_train,
+            'X_val': None,  # No validation set
+            'y_val': None,
+            'X_test': X_test,
+            'y_test': y_test,
+            'ticker': ticker,
+            'window_size': window_size,
+            'prediction_horizon': 5,  # Back to 5 days as in paper
+        }

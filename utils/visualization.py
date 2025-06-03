@@ -257,7 +257,7 @@ def create_improved_architecture_diagram():
         },
         {
             'name': 'Feature\nEngineering',
-            'desc': 'Technical indicators\n& patterns',
+            'desc': 'Bar chart images\n30x30 pixels',
             'symbol': 'F',
             'color': '#3b82f6'
         },
@@ -320,7 +320,7 @@ def create_improved_architecture_diagram():
     # Add subtitle with paper reference
     ax.text(
         0.5, 0.77,
-        'Based on Sezer & Ozbayoglu (2018) with attention mechanism enhancements',
+        'Based on Sezer & Ozbayoglu (2018) with enhanced regularisation and signal processing',
         ha='center', va='center', 
         fontsize=14, 
         fontstyle='italic', 

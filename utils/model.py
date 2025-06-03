@@ -78,12 +78,12 @@ class AdvancedCNN(nn.Module):
         self.bn2 = nn.BatchNorm2d(32)
         
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.dropout1 = nn.Dropout2d(0.5)
+        self.dropout1 = nn.Dropout2d(0.6)
         
         # Larger FC layers
         self.fc1 = nn.Linear(32 * 15 * 15, 128)
         self.bn3 = nn.BatchNorm1d(128)
-        self.dropout2 = nn.Dropout(0.6)
+        self.dropout2 = nn.Dropout(0.7)
         self.fc2 = nn.Linear(128, 3)
         
         self._init_weights()
@@ -146,8 +146,14 @@ class CNNTradingModel:
         return self.model
     
     def train(self, X_train, y_train, X_val=None, y_val=None, 
-              epochs=50, batch_size=32, learning_rate=0.001, 
-              weight_decay=1e-4, patience=5, callback=None):
+            epochs=50, batch_size=32, learning_rate=0.001, 
+            weight_decay=1e-4, patience=5, 
+            use_scheduler=True, use_early_stopping=True,
+            use_gradient_clipping=True, gradient_clip_max_norm=1.0,  
+            scheduler_factor=0.5, scheduler_patience=3,             
+            early_stopping_min_epochs=20,                           
+            callback=None):
+        
         """Unified training method for both models."""
         
         if self.model is None:
@@ -165,14 +171,18 @@ class CNNTradingModel:
         
         # Handle validation data
         if X_val is not None and y_val is not None:
+            # Use provided validation data
             X_val_tensor = torch.tensor(X_val, dtype=torch.float32).to(self.device)
             y_val_tensor = torch.tensor(y_val, dtype=torch.long).to(self.device)
+            logger.info("Using provided validation data")
         else:
+            # Create temporal validation split from training data (no shuffling)
             split_idx = int(0.8 * len(X_train_tensor))
             X_val_tensor = X_train_tensor[split_idx:]
             y_val_tensor = y_train_tensor[split_idx:]
             X_train_tensor = X_train_tensor[:split_idx]
             y_train_tensor = y_train_tensor[:split_idx]
+            logger.info("Created temporal validation split from training data")
         
         # Ensure correct shape
         if len(X_train_tensor.shape) == 3:
@@ -190,28 +200,38 @@ class CNNTradingModel:
             val_dataset, batch_size=batch_size, shuffle=False
         )
         
-        # Optimiser and scheduler
+        # Optimizer
         optimizer = torch.optim.Adam(
             self.model.parameters(), 
             lr=learning_rate, 
             weight_decay=weight_decay
         )
         
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', factor=0.5, patience=3, #verbose=True
-        )
+        # CONDITIONAL SCHEDULER - only create if use_scheduler is True
+        scheduler = None
+        if use_scheduler:
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer, mode='min', factor=scheduler_factor, patience=scheduler_patience
+            )
+            logger.info("Learning rate scheduler enabled")
+        else:
+            logger.info("Learning rate scheduler disabled")
         
         criterion = torch.nn.CrossEntropyLoss()
         
         # Training history
         history = {'loss': [], 'accuracy': [], 'val_loss': [], 'val_accuracy': []}
         
-        # Early stopping
+        # Early stopping variables
         best_val_loss = float('inf')
         patience_counter = 0
         best_model_state = None
         
-        logger.info("Starting training...")
+        logger.info(f"Starting training for {epochs} epochs...")
+        logger.info(f"Training samples: {len(X_train_tensor)}, Validation samples: {len(X_val_tensor)}")
+        logger.info(f"Early stopping: {'Enabled' if use_early_stopping else 'Disabled'} (patience: {patience}, min_epochs: {early_stopping_min_epochs})")
+        logger.info(f"Learning rate scheduler: {'Enabled' if use_scheduler else 'Disabled'} (factor: {scheduler_factor}, patience: {scheduler_patience})")
+        logger.info(f"Gradient clipping: {'Enabled' if use_gradient_clipping else 'Disabled'} (max_norm: {gradient_clip_max_norm})")
         
         for epoch in range(epochs):
             # Training phase
@@ -227,7 +247,8 @@ class CNNTradingModel:
                 loss = criterion(outputs, batch_y)
                 
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                if use_gradient_clipping:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=gradient_clip_max_norm)
                 optimizer.step()
                 
                 train_loss += loss.item()
@@ -257,16 +278,24 @@ class CNNTradingModel:
             val_loss /= len(val_loader)
             val_accuracy = val_correct / val_total
             
-            # Learning rate scheduling
-            scheduler.step(val_loss)
+            # CONDITIONAL LEARNING RATE SCHEDULING
+            if scheduler is not None:
+                scheduler.step(val_loss)
             
-            # Early stopping
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                patience_counter = 0
-                best_model_state = self.model.state_dict().copy()
+            # CONDITIONAL EARLY STOPPING LOGIC
+            if use_early_stopping:
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    patience_counter = 0
+                    best_model_state = self.model.state_dict().copy()
+                else:
+                    patience_counter += 1
             else:
-                patience_counter += 1
+                # If early stopping disabled, still track best model but don't increment patience
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    best_model_state = self.model.state_dict().copy()
+                patience_counter = 0  # Keep patience at 0 when early stopping disabled
             
             # Store history
             history['loss'].append(train_loss)
@@ -280,19 +309,38 @@ class CNNTradingModel:
             
             # Print progress
             if epoch % 10 == 0 or epoch == epochs - 1:
+                current_lr = optimizer.param_groups[0]['lr']
                 print(f'Epoch {epoch+1}/{epochs}:')
                 print(f'  Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}')
                 print(f'  Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.4f}')
+                print(f'  Learning Rate: {current_lr:.6f}')
+                if use_early_stopping:
+                    print(f'  Patience: {patience_counter}/{patience}')
+                else:
+                    print(f'  Early Stopping: Disabled')
             
-            # Early stopping
-            if patience_counter >= patience and epoch > 20:
+            # CONDITIONAL EARLY STOPPING
+            if use_early_stopping and patience_counter >= patience and epoch > early_stopping_min_epochs:
                 print(f"Early stopping triggered at epoch {epoch+1}")
                 break
         
-        # Restore best model
+        # Restore best model if we saved one
         if best_model_state is not None:
             self.model.load_state_dict(best_model_state)
             logger.info(f"Restored best model with validation loss: {best_val_loss:.4f}")
+        
+        # Final training summary
+        final_train_acc = history['accuracy'][-1]
+        final_val_acc = history['val_accuracy'][-1]
+        overfitting_gap = final_train_acc - final_val_acc
+        
+        logger.info("Training completed!")
+        logger.info(f"Final training accuracy: {final_train_acc:.4f}")
+        logger.info(f"Final validation accuracy: {final_val_acc:.4f}")
+        logger.info(f"Overfitting gap: {overfitting_gap:.4f}")
+        
+        if overfitting_gap > 0.15:
+            logger.warning("Significant overfitting detected - consider increasing regularization")
         
         return history
     
