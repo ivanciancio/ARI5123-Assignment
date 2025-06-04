@@ -16,6 +16,10 @@ from torchinfo import summary as torch_summary
 from sklearn.metrics import confusion_matrix, roc_curve, auc
 import seaborn as sns
 from datetime import datetime
+import sys
+import warnings
+
+
 
 # Set page configuration - THIS MUST BE THE FIRST STREAMLIT COMMAND
 st.set_page_config(
@@ -24,6 +28,42 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
+
+# Fix for PyTorch-Streamlit compatibility issue - AFTER set_page_config
+try:
+    import streamlit.watcher.local_sources_watcher
+    
+    # Store the original function
+    _original_get_module_paths = streamlit.watcher.local_sources_watcher.get_module_paths
+    
+    def patched_get_module_paths(module):
+        """Patched version that ignores torch._classes and other problematic modules"""
+        module_name = getattr(module, '__name__', '')
+        # Skip any torch internal modules that cause issues
+        if 'torch' in module_name and any(x in module_name for x in ['_classes', 'classes', '_C']):
+            return []
+        try:
+            return _original_get_module_paths(module)
+        except Exception:
+            # If any error occurs, just return empty list
+            return []
+    
+    # Apply the patch
+    streamlit.watcher.local_sources_watcher.get_module_paths = patched_get_module_paths
+except Exception:
+    # If patching fails, just continue
+    pass
+
+# Also suppress warnings as backup
+warnings.filterwarnings("ignore", message=".*torch.*")
+warnings.filterwarnings("ignore", message=".*no running event loop.*")
+
+
+
+
+
 
 # Import custom modules
 from utils.model import SimpleCNN, AdvancedCNN
@@ -989,7 +1029,7 @@ def display_batch_experiment_page():
         )
         
         quick_run = st.checkbox(
-            "Quick Run (3 stocks only)", 
+            "Quick Run (30 epochs instead of configured epochs)", 
             value=False
         )
     
@@ -1000,12 +1040,83 @@ def display_batch_experiment_page():
             "NKE", "PFE", "PG", "TRV", "UNH", "UTX", "V", "VZ", "WMT", "XOM"
         ]
         
-        if quick_run:
-            selected_stocks = dow30_stocks[:3]
-        else:
-            selected_stocks = dow30_stocks
+        # Stock code to company name mapping
+        stock_names = {
+            "AAPL": "Apple Inc.",
+            "AXP": "American Express",
+            "BA": "Boeing",
+            "CAT": "Caterpillar",
+            "CSCO": "Cisco Systems",
+            "CVX": "Chevron",
+            "DD": "DuPont",
+            "DIS": "Walt Disney",
+            "GE": "General Electric",
+            "GS": "Goldman Sachs",
+            "HD": "Home Depot",
+            "IBM": "IBM",
+            "INTC": "Intel",
+            "JNJ": "Johnson & Johnson",
+            "JPM": "JPMorgan Chase",
+            "KO": "Coca-Cola",
+            "MCD": "McDonald's",
+            "MMM": "3M",
+            "MRK": "Merck",
+            "MSFT": "Microsoft",
+            "NKE": "Nike",
+            "PFE": "Pfizer",
+            "PG": "Procter & Gamble",
+            "TRV": "Travelers",
+            "UNH": "UnitedHealth",
+            "UTX": "United Technologies",
+            "V": "Visa",
+            "VZ": "Verizon",
+            "WMT": "Walmart",
+            "XOM": "ExxonMobil"
+        }
         
-        st.info(f"**Testing {len(selected_stocks)} stocks**")
+        # Always use all stocks, quick_run only affects epochs
+        selected_stocks = dow30_stocks
+        
+        if quick_run:
+            st.info(f"**Testing {len(selected_stocks)} stocks with 30 epochs (Quick Run)**")
+        else:
+            st.info(f"**Testing {len(selected_stocks)} stocks with {config['epochs']} epochs**")
+    
+    # Display stock list in a permanent, always-visible section BEFORE the button
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.markdown("### 📊 Dow 30 Stocks to be Tested")
+    
+    # Create three columns for better display
+    col1_stocks, col2_stocks, col3_stocks = st.columns(3)
+    
+    # Split stocks into three groups
+    stocks_per_column = len(selected_stocks) // 3
+    remainder = len(selected_stocks) % 3
+    
+    # Calculate split points
+    split1 = stocks_per_column + (1 if remainder > 0 else 0)
+    split2 = split1 + stocks_per_column + (1 if remainder > 1 else 0)
+    
+    # Display stocks in columns
+    with col1_stocks:
+        
+        for ticker in selected_stocks[:split1]:
+            st.markdown(f"• **{ticker}** - {stock_names[ticker]}")
+    
+    with col2_stocks:
+        
+        for ticker in selected_stocks[split1:split2]:
+            st.markdown(f"• **{ticker}** - {stock_names[ticker]}")
+    
+    with col3_stocks:
+        
+        for ticker in selected_stocks[split2:]:
+            st.markdown(f"• **{ticker}** - {stock_names[ticker]}")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Add some spacing before the button
+    st.markdown("---")
     
     if st.button("🚀 Run Comprehensive Benchmark Experiment"):
         with st.spinner("Running comprehensive benchmark experiment..."):
