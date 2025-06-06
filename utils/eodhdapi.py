@@ -1,6 +1,6 @@
 import pandas as pd
 import requests
-from datetime import datetime, timedelta  # Added timedelta import
+from datetime import datetime, timedelta  
 import streamlit as st
 
 class EODHDClient:

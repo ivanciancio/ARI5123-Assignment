@@ -14,7 +14,7 @@ import seaborn as sns
 from matplotlib.patches import FancyArrowPatch, Rectangle, Ellipse
 import matplotlib.patheffects as PathEffects
 
-# Set British English style for plots
+# Set style for plots
 plt.rcParams['axes.titlesize'] = 14
 plt.rcParams['axes.labelsize'] = 12
 plt.rcParams['xtick.labelsize'] = 10
@@ -241,7 +241,7 @@ def create_improved_architecture_diagram():
         'shadow': (0, 0, 0, 0.5)
     }
     
-    # Component details with improved descriptions
+    # Component details with descriptions
     components = [
         {
             'name': 'Historical\nStock Data',
@@ -287,7 +287,7 @@ def create_improved_architecture_diagram():
         }
     ]
     
-    # Add a premium background panel
+    # Add a background panel
     ax.add_patch(Rectangle(
         (0.03, 0.15), 0.94, 0.65, 
         facecolor=colors['background'],
@@ -297,7 +297,7 @@ def create_improved_architecture_diagram():
         zorder=0
     ))
     
-    # Add a stylish header band
+    # Add a header band
     ax.add_patch(Rectangle(
         (0.03, 0.7), 0.94, 0.2,
         facecolor=colors['background'],
@@ -306,7 +306,7 @@ def create_improved_architecture_diagram():
         zorder=0
     ))
     
-    # Add title with enhanced styling
+    # Add title
     ax.text(
         0.5, 0.83, 
         'Intelligent Algorithmic Trading System Architecture',
@@ -337,7 +337,7 @@ def create_improved_architecture_diagram():
     
     y_position = 0.45  # Vertical center of the plot
     
-    # Draw components with a more modern, gradient look
+    # Draw components
     for i, component in enumerate(components):
         # Calculate x position
         x = 0.05 + i * (component_width + spacing)
@@ -380,7 +380,7 @@ def create_improved_architecture_diagram():
         )
         ax.add_patch(ellipse)
         
-        # Add symbol text with shadow effect for better visibility
+        # Add symbol text
         symbol_text = ax.text(
             x + component_width/2, 
             y_position + component_height/3,
@@ -397,7 +397,7 @@ def create_improved_architecture_diagram():
             PathEffects.withStroke(linewidth=1, foreground='white')
         ])
         
-        # Add component name (white bold text) with clear contrast
+        # Add component name (white bold text)
         name_text = ax.text(
             x + component_width/2, 
             y_position + 0.02,
@@ -415,7 +415,7 @@ def create_improved_architecture_diagram():
             PathEffects.withStroke(linewidth=1.5, foreground=(0, 0, 0, 0.7))
         ])
         
-        # Add description with improved readability
+        # Add description
         desc_text = ax.text(
             x + component_width/2, 
             y_position - component_height/3,
@@ -433,12 +433,12 @@ def create_improved_architecture_diagram():
             PathEffects.withStroke(linewidth=1.5, foreground=(0, 0, 0, 0.7))
         ])
         
-        # Add stylish connecting arrows with gradient
+        # Add connecting arrows with gradient
         if i < num_components - 1:
             arrow_x_start = x + component_width + 0.005
             arrow_x_end = x + component_width + spacing - 0.005
             
-            # Create fancy arrow with improved styling
+            # Create arrow
             arrow = FancyArrowPatch(
                 (arrow_x_start, y_position), 
                 (arrow_x_end, y_position),
@@ -452,7 +452,7 @@ def create_improved_architecture_diagram():
             )
             ax.add_patch(arrow)
     
-    # Add a data flow arrow with clear positioning
+    # Add a data flow arrow
     dataflow_arrow = FancyArrowPatch(
         (0.2, 0.19),
         (0.8, 0.19),
@@ -466,7 +466,7 @@ def create_improved_architecture_diagram():
     )
     ax.add_patch(dataflow_arrow)
     
-    # Add "Data Flow" text with improved visibility
+    # Add "Data Flow" text
     # Background rectangle for data flow text
     text_bg = Rectangle(
         (0.47, 0.17),

@@ -21,7 +21,7 @@ import warnings
 
 
 
-# Set page configuration - THIS MUST BE THE FIRST STREAMLIT COMMAND
+# Set page configuration
 st.set_page_config(
     page_title="Intelligent Algorithmic Trading System",
     page_icon="📈",
@@ -31,7 +31,7 @@ st.set_page_config(
 
 
 
-# Fix for PyTorch-Streamlit compatibility issue - AFTER set_page_config
+# Fix for PyTorch-Streamlit compatibility issue
 try:
     import streamlit.watcher.local_sources_watcher
     
@@ -61,10 +61,6 @@ warnings.filterwarnings("ignore", message=".*torch.*")
 warnings.filterwarnings("ignore", message=".*no running event loop.*")
 
 
-
-
-
-
 # Import custom modules
 from utils.model import SimpleCNN, AdvancedCNN
 from utils.data_loader import DataLoader
@@ -92,7 +88,7 @@ if 'strategy_results' not in st.session_state:
 if 'benchmark_results' not in st.session_state:
     st.session_state.benchmark_results = None
 
-# Add custom CSS (consolidated)
+# Add custom CSS
 st.markdown("""
 <style>
     .main-header {
@@ -336,11 +332,7 @@ def display_data_preparation():
                 # Progress callback that updates individual stock status
                 successful_count = 0
                 failed_count = 0
-            
-            
-            #overall_progress = st.progress(0)
-            #status_text = st.empty()
-            
+                                  
                 def detailed_progress_callback(current, total, ticker, status, extra_info=None):
                     nonlocal successful_count, failed_count
                     
@@ -382,7 +374,7 @@ def display_data_preparation():
                 
                 try:
                     with st.spinner("Initialising EODHD download..."):
-                        # Use higher batch size for EODHD
+                        
                         data = data_loader.download_benchmark_data(
                             force_download=force_download,
                             batch_size=10,  
@@ -1313,15 +1305,6 @@ def display_batch_results(summary, test_period):
         else:
             st.warning("📉 Underperformed benchmark")
     
-    # CSV download
-    #csv = results_df.to_csv(index=False)
-    #st.download_button(
-    #    label="📥 Download Results CSV",
-    #    data=csv,
-    #    file_name=f"benchmark_results_{test_period}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-    #    mime='text/csv'
-    #)
-
 def get_benchmark_paper_results_fixed(test_period):
     """Get benchmark paper results for comparison."""
     if test_period == "2007-2012":

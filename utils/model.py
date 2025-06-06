@@ -46,7 +46,7 @@ class SimpleCNN(nn.Module):
         self.dropout2 = nn.Dropout(0.7)
         self.fc2 = nn.Linear(64, 3)
         
-        # Initialize weights
+        # Initialise weights
         self.apply(init_cnn_weights)
     
     def forward(self, x):
@@ -87,7 +87,7 @@ class AdvancedCNN(nn.Module):
         self.dropout2 = nn.Dropout(0.7)
         self.fc2 = nn.Linear(128, 3)
         
-        # Initialize weights
+        # Initialise weights
         self.apply(init_cnn_weights)
     
     def forward(self, x):
@@ -132,7 +132,7 @@ class CNNTradingModel:
     
     def train(self, X_train, y_train, X_val=None, y_val=None, 
             epochs=50, batch_size=32, learning_rate=0.001, 
-            weight_decay=1e-4, patience=5, 
+            weight_decay=1e-4, patience=8, 
             use_scheduler=True, use_early_stopping=True,
             use_gradient_clipping=True, gradient_clip_max_norm=1.0,
             scheduler_factor=0.5, scheduler_patience=3,
@@ -181,7 +181,7 @@ class CNNTradingModel:
             val_dataset, batch_size=batch_size, shuffle=False
         )
         
-        # Optimizer
+        # Optimiser
         optimizer = torch.optim.Adam(
             self.model.parameters(), 
             lr=learning_rate, 

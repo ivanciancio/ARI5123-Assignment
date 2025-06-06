@@ -1,5 +1,5 @@
 """
-Data Loader Module - EODHD Version
+Data Loader Module
 
 This module handles downloading and preprocessing financial data using EODHD API.
 """
@@ -200,7 +200,7 @@ class DataLoader:
                 if progress_callback:
                     progress_callback(i + 1, len(dow30_tickers), ticker, "❌ Failed")
             
-            # EODHD has more generous rate limits
+            
             if i < len(dow30_tickers) - 1:
                 delay = random.uniform(0.5, 1.5)
                 time.sleep(delay)
